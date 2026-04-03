@@ -120,6 +120,35 @@ mkdir -p "$STATE_DIR" "$WORKSPACE_DIR"
 mkdir -p "$STATE_DIR/agents/main/sessions" "$STATE_DIR/credentials"
 chmod 700 "$STATE_DIR"
 
+# ── Seed KOOMPI Cloud docs to workspace (first run only) ─────────────────────
+# These teach OpenClaw how to use KConsole, KStorage, and the AI Gateway.
+KOOMPI_DOCS_DIR="$WORKSPACE_DIR/koompi-docs"
+if [ -d "/app/skills" ] && [ ! -d "$KOOMPI_DOCS_DIR" ]; then
+  echo "[entrypoint] seeding KOOMPI Cloud docs to $KOOMPI_DOCS_DIR..."
+  cp -r /app/skills "$KOOMPI_DOCS_DIR"
+fi
+
+# Create AGENTS.md in workspace root so OpenClaw knows about KOOMPI docs
+AGENTS_MD="$WORKSPACE_DIR/AGENTS.md"
+if [ ! -f "$AGENTS_MD" ]; then
+  cat > "$AGENTS_MD" <<'AGENTSEOF'
+# KOOMPI Cloud Instructions
+
+This instance runs on KOOMPI Cloud. KOOMPI-specific documentation is in the `koompi-docs/` directory.
+
+When the user asks you to:
+- Deploy an app / manage services → read `koompi-docs/kconsole.md`
+- Upload files / get CDN links → read `koompi-docs/kstorage.md`
+- Generate images or videos via AI → read `koompi-docs/kconsole-ai.md`
+
+The API keys are already available as env vars:
+- `$KCONSOLE_API_TOKEN` — KConsole API
+- `$KSTORAGE_API_KEY` — KStorage
+- `$KCONSOLE_AI_KEY` / `$AI_GATEWAY_API_KEY` — AI Gateway (https://ai.koompi.cloud/v1)
+AGENTSEOF
+  echo "[entrypoint] created AGENTS.md in workspace"
+fi
+
 # Export state/workspace dirs so openclaw CLI + configure.js see them
 export OPENCLAW_STATE_DIR="$STATE_DIR"
 export OPENCLAW_WORKSPACE_DIR="$WORKSPACE_DIR"

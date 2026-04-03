@@ -16,6 +16,9 @@ RUN rm -f /etc/nginx/sites-enabled/default
 COPY scripts/ /app/scripts/
 RUN chmod +x /app/scripts/*.sh
 
+# Bundle KOOMPI Cloud skill docs (KConsole, KStorage, AI Gateway)
+COPY skills/ /app/skills/
+
 ENV NPM_CONFIG_PREFIX="/data/npm-global" \
     UV_TOOL_DIR="/data/uv/tools" \
     UV_CACHE_DIR="/data/uv/cache" \
