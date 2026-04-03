@@ -81,6 +81,13 @@ KCONSOLE_AI="${KCONSOLE_AI_KEY:-}"
 if [ -n "$KCONSOLE_AI" ]; then
   export AI_GATEWAY_API_KEY="$KCONSOLE_AI"
   echo "[entrypoint] AI_GATEWAY_API_KEY set from KCONSOLE_AI_KEY"
+  # Also expose as GEMINI_API_KEY so openclaw's embedding provider (memory search)
+  # can use the KOOMPI AI Gateway's Gemini-compatible embedding endpoint.
+  if [ -z "${GEMINI_API_KEY:-}" ]; then
+    export GEMINI_API_KEY="$KCONSOLE_AI"
+    export GEMINI_BASE_URL="https://ai.koompi.cloud/v1"
+    echo "[entrypoint] GEMINI_API_KEY set from KCONSOLE_AI_KEY (for memory search embeddings)"
+  fi
 fi
 # Always point to KOOMPI AI gateway unless user overrides
 if [ -z "${AI_GATEWAY_BASE_URL:-}" ]; then
@@ -229,6 +236,33 @@ if [ -n "$HOOKS_PATH" ]; then
     }"
 fi
 
+# Build browser sidecar location block (only when ENABLE_BROWSER_SIDECAR is set)
+# Without this guard nginx fails to start on standalone deployments because the
+# "browser" hostname doesn't resolve (it's only available in docker-compose).
+BROWSER_LOCATION_BLOCK=""
+BROWSER_SIDECAR_HOST="${BROWSER_SIDECAR_HOST:-browser}"
+BROWSER_SIDECAR_PORT="${BROWSER_SIDECAR_PORT:-3000}"
+if [ -n "${ENABLE_BROWSER_SIDECAR:-}" ]; then
+  echo "[entrypoint] browser sidecar enabled at http://${BROWSER_SIDECAR_HOST}:${BROWSER_SIDECAR_PORT}"
+  BROWSER_LOCATION_BLOCK="# Browser sidecar proxy (VNC web UI)
+    location /browser/ {
+        ${AUTH_BLOCK}
+
+        proxy_pass http://${BROWSER_SIDECAR_HOST}:${BROWSER_SIDECAR_PORT}/;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection \$connection_upgrade;
+
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+    }"
+fi
+
 # ── Write startup page for 502/503/504 while gateway boots ───────────────────
 mkdir -p /usr/share/nginx/html
 cat > /usr/share/nginx/html/starting.html <<'STARTPAGE'
@@ -325,23 +359,7 @@ server {
         internal;
     }
 
-    # Browser sidecar proxy (VNC web UI)
-    location /browser/ {
-        ${AUTH_BLOCK}
-
-        proxy_pass http://browser:3000/;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection \$connection_upgrade;
-
-        proxy_read_timeout 86400s;
-        proxy_send_timeout 86400s;
-    }
+    ${BROWSER_LOCATION_BLOCK}
 }
 NGINXEOF
 
