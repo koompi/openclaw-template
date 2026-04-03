@@ -339,6 +339,48 @@ if (ollamaUrl) {
   removeProvider("ollama", "Ollama", "OLLAMA_BASE_URL");
 }
 
+// KOOMPI AI Gateway (OpenAI-compatible custom provider)
+// AI_GATEWAY_API_KEY + AI_GATEWAY_BASE_URL are injected by entrypoint.sh from KCONSOLE_AI_KEY.
+// We register it as the "kconsole" custom provider so models are fully qualified as
+// kconsole/glm-5-turbo, kconsole/gemini-3-flash-preview, etc.
+const kconsoleApiKey = (process.env.AI_GATEWAY_API_KEY || "").trim();
+const kconsoleBaseUrl = (process.env.AI_GATEWAY_BASE_URL || "https://ai.koompi.cloud/v1").replace(/\/+$/, "");
+if (kconsoleApiKey) {
+  console.log("[configure] configuring KOOMPI AI Gateway custom provider at", kconsoleBaseUrl);
+  ensure(config, "models", "providers");
+  config.models.providers.kconsole = {
+    api: "openai-completions",
+    baseUrl: kconsoleBaseUrl,
+    apiKey: kconsoleApiKey,
+    models: [
+      { id: "glm-5-turbo",            name: "GLM-5 Turbo (fast, cheap)",   contextWindow: 128000, maxTokens: 16384, reasoning: false, input: ["text"], cost: { input: 0.07,  output: 0.07,  cacheRead: 0, cacheWrite: 0 } },
+      { id: "glm-5",                  name: "GLM-5",                        contextWindow: 128000, maxTokens: 16384, reasoning: false, input: ["text"], cost: { input: 0.14,  output: 0.14,  cacheRead: 0, cacheWrite: 0 } },
+      { id: "gemini-3-flash-preview", name: "Gemini 3 Flash",               contextWindow: 1000000, maxTokens: 8192, reasoning: false, input: ["text"], cost: { input: 0.50,  output: 3.00,  cacheRead: 0, cacheWrite: 0 } },
+      { id: "gemini-3.1-pro-preview", name: "Gemini 3.1 Pro",               contextWindow: 1000000, maxTokens: 8192, reasoning: true,  input: ["text"], cost: { input: 2.00,  output: 12.00, cacheRead: 0, cacheWrite: 0 } },
+      { id: "gemini-2.5-pro",         name: "Gemini 2.5 Pro",               contextWindow: 1000000, maxTokens: 8192, reasoning: true,  input: ["text"], cost: { input: 1.25,  output: 10.00, cacheRead: 0, cacheWrite: 0 } },
+      { id: "gemini-2.5-flash",       name: "Gemini 2.5 Flash",             contextWindow: 1000000, maxTokens: 8192, reasoning: false, input: ["text"], cost: { input: 0.30,  output: 2.50,  cacheRead: 0, cacheWrite: 0 } },
+    ],
+  };
+  // Allowlist all models so openclaw will route to them
+  ensure(config, "agents", "defaults", "models");
+  const kconsoleAllowlist = {
+    "kconsole/glm-5-turbo":            { alias: "glm-5-turbo" },
+    "kconsole/glm-5":                  { alias: "glm-5" },
+    "kconsole/gemini-3-flash-preview": { alias: "gemini-3-flash" },
+    "kconsole/gemini-3.1-pro-preview": { alias: "gemini-3.1-pro" },
+    "kconsole/gemini-2.5-pro":         { alias: "gemini-2.5-pro" },
+    "kconsole/gemini-2.5-flash":       { alias: "gemini-2.5-flash" },
+  };
+  for (const [k, v] of Object.entries(kconsoleAllowlist)) {
+    // Don't overwrite if already set (e.g. from custom JSON)
+    if (!config.agents.defaults.models[k]) {
+      config.agents.defaults.models[k] = v;
+    }
+  }
+} else {
+  removeProvider("kconsole", "KOOMPI AI Gateway", "AI_GATEWAY_API_KEY");
+}
+
 // ── Primary model selection (first available provider wins) ─────────────────
 const primaryCandidates = [
   [process.env.ANTHROPIC_API_KEY,      "anthropic/claude-opus-4-5-20251101"],
@@ -357,7 +399,7 @@ const primaryCandidates = [
   [process.env.MINIMAX_API_KEY,        "minimax/MiniMax-M2.1"],
   [process.env.SYNTHETIC_API_KEY,      "synthetic/hf:MiniMaxAI/MiniMax-M2.1"],
   [process.env.ZAI_API_KEY,            "zai/glm-4.7"],
-  [process.env.AI_GATEWAY_API_KEY,     "vercel-ai-gateway/anthropic/claude-opus-4.5"],
+  [kconsoleApiKey,                     "kconsole/glm-5-turbo"],
   [process.env.XIAOMI_API_KEY,         "xiaomi/mimo-v2-flash"],
   [process.env.AWS_ACCESS_KEY_ID,      "amazon-bedrock/anthropic.claude-opus-4-5-20251101-v1:0"],
   [ollamaUrl,                          "ollama/llama3.3"],
