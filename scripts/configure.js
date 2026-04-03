@@ -116,6 +116,14 @@ if (config.gateway.bind === undefined) {
   config.gateway.bind = process.env.OPENCLAW_GATEWAY_BIND || "loopback";
 }
 
+// Trusted proxies: always trust loopback so nginx (running on the same container)
+// can forward X-Forwarded-For headers without triggering the proxy-header warning.
+// Without this, openclaw rejects WebSocket connects with "nonce must NOT have fewer
+// than 1 characters" because it can't derive local client status from the headers.
+if (!config.gateway.trustedProxies || config.gateway.trustedProxies.length === 0) {
+  config.gateway.trustedProxies = ["127.0.0.1", "::1"];
+}
+
 // ── Agents defaults ─────────────────────────────────────────────────────────
 
 ensure(config, "agents", "defaults");
