@@ -63,13 +63,36 @@ if [ -n "${OPENCLAW_DOCKER_APT_PACKAGES:-}" ]; then
     && rm -rf /var/lib/apt/lists/*
 fi
 
-# ── Require OPENCLAW_GATEWAY_TOKEN ───────────────────────────────────────────
+# ── Auto-generate OPENCLAW_GATEWAY_TOKEN if not provided ─────────────────────
 if [ -z "${OPENCLAW_GATEWAY_TOKEN:-}" ]; then
-  echo "[entrypoint] ERROR: OPENCLAW_GATEWAY_TOKEN is required."
-  echo "[entrypoint] Generate one with: openssl rand -hex 32"
-  exit 1
+  GENERATED_TOKEN=$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p -c 32)
+  export OPENCLAW_GATEWAY_TOKEN="$GENERATED_TOKEN"
+  echo "[entrypoint] Auto-generated OPENCLAW_GATEWAY_TOKEN (gateway is internal-only, not exposed)"
 fi
 GATEWAY_TOKEN="$OPENCLAW_GATEWAY_TOKEN"
+
+# ── KConsole Cloud key injection ─────────────────────────────────────────────
+# Users provide KCONSOLE_AI_KEY for the AI Gateway and KCONSOLE_API_TOKEN for
+# the platform. We propagate them to the env vars openclaw expects.
+# This runs BEFORE the provider check so KCONSOLE_AI_KEY satisfies it.
+
+# AI Gateway: map KCONSOLE_AI_KEY → AI_GATEWAY_API_KEY + AI_GATEWAY_BASE_URL
+KCONSOLE_AI="${KCONSOLE_AI_KEY:-}"
+if [ -n "$KCONSOLE_AI" ]; then
+  export AI_GATEWAY_API_KEY="$KCONSOLE_AI"
+  echo "[entrypoint] AI_GATEWAY_API_KEY set from KCONSOLE_AI_KEY"
+fi
+# Always point to KOOMPI AI gateway unless user overrides
+if [ -z "${AI_GATEWAY_BASE_URL:-}" ]; then
+  export AI_GATEWAY_BASE_URL="https://ai.koompi.cloud/v1"
+fi
+
+# ── Telegram: default to allowlist policy (no pairing required) ───────────────
+# If user hasn't explicitly set a DM policy, default to allowlist.
+# Combined with TELEGRAM_ALLOW_FROM, this avoids the pairing flow entirely.
+if [ -z "${TELEGRAM_DM_POLICY:-}" ]; then
+  export TELEGRAM_DM_POLICY="allowlist"
+fi
 
 # ── Require at least one AI provider API key env var ─────────────────────────
 # Providers always read API keys from env vars, never from JSON config.
@@ -86,10 +109,9 @@ done
 if [ "$HAS_PROVIDER" -eq 0 ]; then
   echo "[entrypoint] ERROR: At least one AI provider API key env var is required."
   echo "[entrypoint] Providers read API keys from env vars, never from the JSON config."
-  echo "[entrypoint] Set one of: ANTHROPIC_API_KEY, OPENAI_API_KEY, OPENROUTER_API_KEY, GEMINI_API_KEY,"
-  echo "[entrypoint]   XAI_API_KEY, GROQ_API_KEY, MISTRAL_API_KEY, CEREBRAS_API_KEY, VENICE_API_KEY,"
-  echo "[entrypoint]   MOONSHOT_API_KEY, KIMI_API_KEY, MINIMAX_API_KEY, ZAI_API_KEY, AI_GATEWAY_API_KEY,"
-  echo "[entrypoint]   OPENCODE_API_KEY, SYNTHETIC_API_KEY, COPILOT_GITHUB_TOKEN, XIAOMI_API_KEY"
+  echo "[entrypoint] Set KCONSOLE_AI_KEY (KConsole AI Gateway), or one of:"
+  echo "[entrypoint]   ANTHROPIC_API_KEY, OPENAI_API_KEY, OPENROUTER_API_KEY, GEMINI_API_KEY,"
+  echo "[entrypoint]   XAI_API_KEY, GROQ_API_KEY, MISTRAL_API_KEY, AI_GATEWAY_API_KEY, ..."
   echo "[entrypoint] Or: AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY (Bedrock), OLLAMA_BASE_URL (local)"
   exit 1
 fi
