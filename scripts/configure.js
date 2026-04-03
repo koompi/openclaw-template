@@ -437,6 +437,38 @@ if (process.env.DEEPGRAM_API_KEY) {
 // provides a channel, it stays unconfigured. We never remove channels that
 // came from the custom JSON.
 
+// ── Memory search / memory-lancedb plugin ────────────────────────────────────
+// When AI_GATEWAY_API_KEY is set, configure the memory-lancedb plugin to use
+// our KOOMPI AI Gateway for embeddings (text-embedding-004 via Gemini, 768d).
+// This routes all embedding traffic through ai.koompi.cloud — the kpi_* key
+// would 401 if sent directly to Google/OpenAI APIs.
+// Set OPENCLAW_MEMORY_SEARCH=false to disable even when the key is present.
+if (kconsoleApiKey && process.env.OPENCLAW_MEMORY_SEARCH !== "false") {
+  ensure(config, "plugins", "entries");
+  const lancedb = config.plugins.entries["memory-lancedb"] =
+    config.plugins.entries["memory-lancedb"] || {};
+  lancedb.enabled = true;
+  lancedb.config = lancedb.config || {};
+  lancedb.config.embedding = {
+    apiKey: kconsoleApiKey,
+    baseUrl: kconsoleBaseUrl,
+    model: "text-embedding-004",
+    dimensions: 768,
+  };
+  if (lancedb.config.autoCapture === undefined) lancedb.config.autoCapture = false;
+  if (lancedb.config.autoRecall  === undefined) lancedb.config.autoRecall  = true;
+  ensure(config, "plugins", "slots");
+  config.plugins.slots.memory = "memory-lancedb";
+  ensure(config, "agents", "defaults", "memorySearch");
+  config.agents.defaults.memorySearch.enabled = true;
+  console.log("[configure] memory search enabled → memory-lancedb via KOOMPI AI Gateway (text-embedding-004, 768d)");
+} else {
+  ensure(config, "agents", "defaults", "memorySearch");
+  config.agents.defaults.memorySearch.enabled = false;
+  const reason = !kconsoleApiKey ? "no AI_GATEWAY_API_KEY" : "OPENCLAW_MEMORY_SEARCH=false";
+  console.log(`[configure] memory search disabled (${reason})`);
+}
+
 if (process.env.TELEGRAM_BOT_TOKEN) {
   console.log("[configure] configuring Telegram channel (from env)");
   ensure(config, "channels");

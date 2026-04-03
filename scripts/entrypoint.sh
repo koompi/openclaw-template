@@ -81,13 +81,6 @@ KCONSOLE_AI="${KCONSOLE_AI_KEY:-}"
 if [ -n "$KCONSOLE_AI" ]; then
   export AI_GATEWAY_API_KEY="$KCONSOLE_AI"
   echo "[entrypoint] AI_GATEWAY_API_KEY set from KCONSOLE_AI_KEY"
-  # Also expose as GEMINI_API_KEY so openclaw's embedding provider (memory search)
-  # can use the KOOMPI AI Gateway's Gemini-compatible embedding endpoint.
-  if [ -z "${GEMINI_API_KEY:-}" ]; then
-    export GEMINI_API_KEY="$KCONSOLE_AI"
-    export GEMINI_BASE_URL="https://ai.koompi.cloud/v1"
-    echo "[entrypoint] GEMINI_API_KEY set from KCONSOLE_AI_KEY (for memory search embeddings)"
-  fi
 fi
 # Always point to KOOMPI AI gateway unless user overrides
 if [ -z "${AI_GATEWAY_BASE_URL:-}" ]; then
