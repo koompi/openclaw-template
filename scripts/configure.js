@@ -438,10 +438,9 @@ if (process.env.DEEPGRAM_API_KEY) {
 // came from the custom JSON.
 
 // ── Memory search / memory-lancedb plugin ────────────────────────────────────
-// When AI_GATEWAY_API_KEY is set, configure the memory-lancedb plugin to use
-// our KOOMPI AI Gateway for embeddings (text-embedding-004 via Gemini, 768d).
-// This routes all embedding traffic through ai.koompi.cloud — the kpi_* key
-// would 401 if sent directly to Google/OpenAI APIs.
+// Uses the memory-lancedb PLUGIN (not the built-in agents.defaults.memorySearch).
+// The built-in memorySearch falls back to local 384d embeddings when no upstream
+// API is reachable — we explicitly disable it and rely solely on the plugin.
 // Set OPENCLAW_MEMORY_SEARCH=false to disable even when the key is present.
 if (kconsoleApiKey && process.env.OPENCLAW_MEMORY_SEARCH !== "false") {
   ensure(config, "plugins", "entries");
@@ -461,9 +460,11 @@ if (kconsoleApiKey && process.env.OPENCLAW_MEMORY_SEARCH !== "false") {
   if (lancedb.config.autoRecall  === undefined) lancedb.config.autoRecall  = true;
   ensure(config, "plugins", "slots");
   config.plugins.slots.memory = "memory-lancedb";
+  // Explicitly disable the built-in memorySearch — it uses local 384d embeddings
+  // and would shadow the plugin, causing dimension mismatch errors.
   ensure(config, "agents", "defaults", "memorySearch");
-  config.agents.defaults.memorySearch.enabled = true;
-  console.log("[configure] memory search enabled → memory-lancedb via KOOMPI AI Gateway (text-embedding-3-small alias → gemini-embedding-001 @ 1536d)");
+  config.agents.defaults.memorySearch.enabled = false;
+  console.log("[configure] memory search enabled → memory-lancedb plugin via KOOMPI AI Gateway (text-embedding-3-small → gemini-embedding-001 @ 1536d)");
 } else {
   ensure(config, "agents", "defaults", "memorySearch");
   config.agents.defaults.memorySearch.enabled = false;
