@@ -453,7 +453,7 @@ if (kconsoleApiKey && process.env.OPENCLAW_MEMORY_SEARCH !== "false") {
     apiKey: kconsoleApiKey,
     baseUrl: kconsoleBaseUrl,
     model: "gemini-embedding-001",
-    dimensions: 3072,
+    // dimensions intentionally omitted — gemini-embedding-001 defaults to 3072d
   };
   if (lancedb.config.autoCapture === undefined) lancedb.config.autoCapture = false;
   if (lancedb.config.autoRecall  === undefined) lancedb.config.autoRecall  = true;
@@ -461,7 +461,7 @@ if (kconsoleApiKey && process.env.OPENCLAW_MEMORY_SEARCH !== "false") {
   config.plugins.slots.memory = "memory-lancedb";
   ensure(config, "agents", "defaults", "memorySearch");
   config.agents.defaults.memorySearch.enabled = true;
-  console.log("[configure] memory search enabled → memory-lancedb via KOOMPI AI Gateway (gemini-embedding-001, 3072d)");
+  console.log("[configure] memory search enabled → memory-lancedb via KOOMPI AI Gateway (gemini-embedding-001, default 3072d)");
 } else {
   ensure(config, "agents", "defaults", "memorySearch");
   config.agents.defaults.memorySearch.enabled = false;
