@@ -10,6 +10,8 @@ This workspace includes documentation for KOOMPI Cloud platform services. Read t
 | [kstorage.md](kstorage.md) | Upload files, get CDN URLs, manage stored assets |
 | [kconsole-ai.md](kconsole-ai.md) | Generate images/videos via AI Gateway (Gemini, Imagen, Veo) |
 | [sync.md](sync.md) | Universal context primer, immediately load all memory, check infrastructure, and report active state. Use when switching topics or starting a new session mid-day.
+| [claude-code-kconsole](claude-code-kconsole/SKILL.md) | Use this skill when we need to vibe coding |
+
 
 ## Quick Auth Reference
 
