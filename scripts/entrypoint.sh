@@ -172,6 +172,9 @@ if [ -n "$INIT_SCRIPT" ]; then
 fi
 
 # ── Configure openclaw from env vars ─────────────────────────────────────────
+# Clear jiti cache before configure — memory-lancedb-pro recommends this
+# after plugin upgrades, and it's harmless on fresh starts.
+rm -rf /tmp/jiti/ 2>/dev/null || true
 echo "[entrypoint] running configure..."
 node /app/scripts/configure.js
 chmod 600 "$STATE_DIR/openclaw.json"

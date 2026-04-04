@@ -437,34 +437,70 @@ if (process.env.DEEPGRAM_API_KEY) {
 // provides a channel, it stays unconfigured. We never remove channels that
 // came from the custom JSON.
 
-// ── Memory search / memory-lancedb plugin ────────────────────────────────────
-// Uses the memory-lancedb PLUGIN (not the built-in agents.defaults.memorySearch).
-// The built-in memorySearch falls back to local 384d embeddings when no upstream
-// API is reachable — we explicitly disable it and rely solely on the plugin.
+// ── Memory search / memory-lancedb-pro plugin ────────────────────────────────
+// Uses memory-lancedb-pro (not the built-in memory-lancedb or memorySearch).
+// memory-lancedb-pro supports provider: "openai-compatible" so any model name
+// works with any baseURL — no hardcoded model allowlist.
+// Features: hybrid retrieval (vector + BM25), cross-encoder reranking, smart
+// extraction, Weibull decay, noise filtering, multi-scope isolation.
 // Set OPENCLAW_MEMORY_SEARCH=false to disable even when the key is present.
 if (kconsoleApiKey && process.env.OPENCLAW_MEMORY_SEARCH !== "false") {
+  // Ensure plugin load path is registered (npm install at /app/plugins/)
+  ensure(config, "plugins", "load");
+  config.plugins.load.paths = config.plugins.load.paths || [];
+  const proPluginPath = "/app/plugins/node_modules/memory-lancedb-pro";
+  if (!config.plugins.load.paths.includes(proPluginPath)) {
+    config.plugins.load.paths.push(proPluginPath);
+  }
+
   ensure(config, "plugins", "entries");
-  const lancedb = config.plugins.entries["memory-lancedb"] =
-    config.plugins.entries["memory-lancedb"] || {};
-  lancedb.enabled = true;
-  lancedb.config = lancedb.config || {};
-  lancedb.config.embedding = {
+  // Remove old built-in memory-lancedb config if present (migration)
+  if (config.plugins.entries["memory-lancedb"]) {
+    delete config.plugins.entries["memory-lancedb"];
+    console.log("[configure] migrating from memory-lancedb → memory-lancedb-pro");
+  }
+
+  const pro = config.plugins.entries["memory-lancedb-pro"] =
+    config.plugins.entries["memory-lancedb-pro"] || {};
+  pro.enabled = true;
+  pro.config = pro.config || {};
+
+  // Embedding: use KOOMPI AI Gateway with OpenAI-compatible protocol.
+  // text-embedding-3-small → our gateway maps to gemini-embedding-001 @ 1536d.
+  pro.config.embedding = {
+    provider: "openai-compatible",
     apiKey: kconsoleApiKey,
-    baseUrl: kconsoleBaseUrl,
-    // text-embedding-3-small is recognized by memory-lancedb's model allowlist.
-    // Our AI Gateway maps it → gemini-embedding-001 with output_dimensionality: 1536.
+    baseURL: kconsoleBaseUrl,
     model: "text-embedding-3-small",
     dimensions: 1536,
   };
-  if (lancedb.config.autoCapture === undefined) lancedb.config.autoCapture = false;
-  if (lancedb.config.autoRecall  === undefined) lancedb.config.autoRecall  = true;
+
+  // Smart extraction LLM: use cheapest model on our gateway
+  pro.config.llm = pro.config.llm || {};
+  if (!pro.config.llm.apiKey) pro.config.llm.apiKey = kconsoleApiKey;
+  if (!pro.config.llm.baseURL) pro.config.llm.baseURL = kconsoleBaseUrl;
+  if (!pro.config.llm.model)   pro.config.llm.model = "glm-5-turbo";
+
+  // Sensible defaults (don't overwrite user customizations)
+  if (pro.config.autoCapture       === undefined) pro.config.autoCapture = true;
+  if (pro.config.autoRecall        === undefined) pro.config.autoRecall = true;
+  if (pro.config.smartExtraction   === undefined) pro.config.smartExtraction = true;
+  if (pro.config.extractMinMessages === undefined) pro.config.extractMinMessages = 2;
+  if (pro.config.extractMaxChars   === undefined) pro.config.extractMaxChars = 8000;
+  if (pro.config.sessionMemory     === undefined) pro.config.sessionMemory = { enabled: false };
+
   ensure(config, "plugins", "slots");
-  config.plugins.slots.memory = "memory-lancedb";
+  config.plugins.slots.memory = "memory-lancedb-pro";
+
   // Explicitly disable the built-in memorySearch — it uses local 384d embeddings
   // and would shadow the plugin, causing dimension mismatch errors.
   ensure(config, "agents", "defaults", "memorySearch");
   config.agents.defaults.memorySearch.enabled = false;
-  console.log("[configure] memory search enabled → memory-lancedb plugin via KOOMPI AI Gateway (text-embedding-3-small → gemini-embedding-001 @ 1536d)");
+
+  console.log("[configure] memory search enabled → memory-lancedb-pro via KOOMPI AI Gateway");
+  console.log("[configure]   embedding: text-embedding-3-small @ 1536d (→ gemini-embedding-001)");
+  console.log("[configure]   smart extraction LLM: glm-5-turbo");
+  console.log("[configure]   autoCapture: true, autoRecall: true, smartExtraction: true");
 } else {
   ensure(config, "agents", "defaults", "memorySearch");
   config.agents.defaults.memorySearch.enabled = false;

@@ -16,6 +16,12 @@ RUN rm -f /etc/nginx/sites-enabled/default
 COPY scripts/ /app/scripts/
 RUN chmod +x /app/scripts/*.sh
 
+# Install memory-lancedb-pro plugin at build time.
+# The plugin path is added to plugins.load.paths by configure.js.
+RUN mkdir -p /app/plugins && cd /app/plugins \
+  && npm init -y --silent 2>/dev/null \
+  && npm install memory-lancedb-pro@beta --save --silent 2>&1 | tail -5
+
 # Bundle KOOMPI Cloud skill docs (KConsole, KStorage, AI Gateway)
 COPY skills/ /app/skills/
 
