@@ -111,6 +111,20 @@ if (config.gateway.controlUi.enabled === undefined) {
   config.gateway.controlUi.enabled = true;
 }
 
+// Disable device identity checks for containerised deployments.
+// In a single-container setup (nginx + gateway + tools in one image) all
+// connections originate from 127.0.0.1.  With trustedProxies including
+// "127.0.0.1", the gateway expects X-Forwarded-For from loopback — but
+// internal tools (cron, memory, etc.) connect via WebSocket directly and
+// never set that header, causing ip=unknown-ip.  Without a recognisable
+// local IP the gateway cannot auto-approve scope upgrades (operator.approvals
+// → operator.admin), which breaks cron and other control-plane tools.
+// Since all auth already goes through the auto-generated gateway token,
+// device identity adds no additional security in this deployment model.
+if (config.gateway.controlUi.dangerouslyDisableDeviceAuth === undefined) {
+  config.gateway.controlUi.dangerouslyDisableDeviceAuth = true;
+}
+
 // Bind address (all gateway config comes from openclaw.json; "gateway run" reads it)
 if (config.gateway.bind === undefined) {
   config.gateway.bind = process.env.OPENCLAW_GATEWAY_BIND || "loopback";

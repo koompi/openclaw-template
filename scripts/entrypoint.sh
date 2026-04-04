@@ -220,7 +220,7 @@ if [ -n "$HOOKS_PATH" ]; then
 
         proxy_set_header Host \\\$host;
         proxy_set_header X-Real-IP \\\$remote_addr;
-        proxy_set_header X-Forwarded-For \\\$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-For \\\$remote_addr;
         proxy_set_header X-Forwarded-Proto \\\$scheme;
 
         proxy_http_version 1.1;
@@ -247,7 +247,7 @@ if [ -n "${ENABLE_BROWSER_SIDECAR:-}" ]; then
         proxy_pass http://${BROWSER_SIDECAR_HOST}:${BROWSER_SIDECAR_PORT}/;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-For \$remote_addr;
         proxy_set_header X-Forwarded-Proto \$scheme;
 
         proxy_http_version 1.1;
@@ -337,7 +337,7 @@ server {
 
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-For \$remote_addr;
         proxy_set_header X-Forwarded-Proto \$scheme;
 
         proxy_http_version 1.1;
