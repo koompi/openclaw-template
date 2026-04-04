@@ -82,48 +82,44 @@ The `env` block applies to **interactive sessions**. For `--print` mode, pass en
 
 ## Spawning Claude Code
 
-### One-shot (—print mode) — GLM (default)
+### Critical: workdir Must Be the Project Folder
+
+**Always `cd` into the project directory before spawning Claude Code.** If you don't, it defaults to `/opt/openclaw/app` (read-only) and files won't persist.
 
 ```bash
+cd /data/workspace/my-project && \
 ANTHROPIC_AUTH_TOKEN=$KCONSOLE_AI_KEY \
 ANTHROPIC_BASE_URL=https://ai.koompi.cloud \
 IS_SANDBOX=1 \
 API_TIMEOUT_MS=3000000 \
 CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
-claude --print "Your prompt here"
+ANTHROPIC_HEADERS="x-backend: gemini" \
+claude --model claude-sonnet-4-6 --permission-mode bypassPermissions --print "Your prompt here"
+```
+
+### One-shot (—print mode) — GLM (default)
+
+```bash
+cd /path/to/project && \
+ANTHROPIC_AUTH_TOKEN=$KCONSOLE_AI_KEY \
+ANTHROPIC_BASE_URL=https://ai.koompi.cloud \
+IS_SANDBOX=1 \
+API_TIMEOUT_MS=3000000 \
+CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
+claude --model claude-sonnet-4-6 --permission-mode bypassPermissions --print "Your prompt here"
 ```
 
 ### One-shot (—print mode) — Gemini
 
 ```bash
+cd /path/to/project && \
 ANTHROPIC_AUTH_TOKEN=$KCONSOLE_AI_KEY \
 ANTHROPIC_BASE_URL=https://ai.koompi.cloud \
 IS_SANDBOX=1 \
 API_TIMEOUT_MS=3000000 \
 CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
 ANTHROPIC_HEADERS="x-backend: gemini" \
-claude --print "Your prompt here"
-```
-
-For long tasks, add `--dangerously-skip-permissions` (requires `IS_SANDBOX=1`):
-
-```bash
-ANTHROPIC_AUTH_TOKEN=$KCONSOLE_AI_KEY \
-ANTHROPIC_BASE_URL=https://ai.koompi.cloud \
-IS_SANDBOX=1 \
-API_TIMEOUT_MS=3000000 \
-CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
-ANTHROPIC_HEADERS="x-backend: gemini" \
-claude --dangerously-skip-permissions --print "Your prompt here"
-```
-
-### Interactive (—dangerously-skip-permissions)
-
-```bash
-ANTHROPIC_AUTH_TOKEN=$KCONSOLE_AI_KEY \
-ANTHROPIC_BASE_URL=https://ai.koompi.cloud \
-IS_SANDBOX=1 \
-claude --dangerously-skip-permissions
+claude --model claude-sonnet-4-6 --permission-mode bypassPermissions --print "Your prompt here"
 ```
 
 ### Model Override
@@ -131,7 +127,7 @@ claude --dangerously-skip-permissions
 To force a specific Claude model tier (gateway translates):
 
 ```bash
-claude --model claude-opus-4-6 --print "..."
+claude --model claude-opus-4-6 --permission-mode bypassPermissions --print "..."
 ```
 
 ### Switch Backend Mid-Session
@@ -140,11 +136,34 @@ Use `ANTHROPIC_HEADERS` to toggle between GLM and Gemini without changing anythi
 
 ```bash
 # GLM backend (default)
-ANTHROPIC_HEADERS="x-backend: glm" claude --print "..."
+ANTHROPIC_HEADERS="x-backend: glm" claude --permission-mode bypassPermissions --print "..."
 
 # Gemini backend
-ANTHROPIC_HEADERS="x-backend: gemini" claude --print "..."
+ANTHROPIC_HEADERS="x-backend: gemini" claude --permission-mode bypassPermissions --print "..."
 ```
+
+### Using exec Tool to Spawn (from OpenClaw)
+
+When spawning from OpenClaw, use `pty: true` and set `workdir` to the project folder:
+
+```
+exec(command="claude --model claude-sonnet-4-6 --permission-mode bypassPermissions --print 'Your prompt'", workdir="/data/workspace/my-project", pty=true, timeout=300, background=true, env={
+  ANTHROPIC_AUTH_TOKEN: process.env.KCONSOLE_AI_KEY,
+  ANTHROPIC_BASE_URL: "https://ai.koompi.cloud",
+  IS_SANDBOX: "1",
+  API_TIMEOUT_MS: "3000000",
+  CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
+  ANTHROPIC_HEADERS: "x-backend: gemini"
+})
+```
+
+## Notes
+
+- **`--permission-mode bypassPermissions`** is the current flag (replaces the deprecated `--dangerously-skip-permissions`). Requires `IS_SANDBOX=1`.
+- **`thought_signature` fix:** The gateway now injects Google's dummy `thought_signature` into `functionCall` parts, resolving the error Claude Code had when using tools with Gemini/GLM backends. This is handled server-side — no client config needed.
+- **Gemini 3 models confirmed working** — both `gemini-3-flash-preview` (Sonnet) and `gemini-3.1-pro-preview` (Opus) work with full tool use.
+- **GLM-5 confirmed working** — full tool use after the same `thought_signature` fix.
+- **No Claude subscription needed** — the KConsole AI Gateway translates Claude Code's Anthropic API calls to GLM/Gemini server-side.
 
 ## Troubleshooting
 
