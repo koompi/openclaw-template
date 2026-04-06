@@ -152,7 +152,11 @@ The API keys are already available as env vars:
 - `$KSTORAGE_API_KEY` — KStorage
 - `$KCONSOLE_AI_KEY` / `$AI_GATEWAY_API_KEY` — AI Gateway (https://ai.koompi.cloud/v1)
 
-Pre-installed tools: Chromium (headless browser), Python with pandas/openpyxl/reportlab/Pillow/matplotlib, uv, Go, Node.js, Linuxbrew.
+Pre-installed tools: Chromium (headless browser), ffmpeg, Python with pandas/openpyxl/reportlab/Pillow/matplotlib, uv, Go, Node.js, Linuxbrew.
+
+## Admin Commands (run in terminal)
+- \`oc-allow <telegram_id>\` — Add a Telegram user to the persistent allowlist (survives restarts) and hot-reload config
+- \`oc-reload\` — Re-run configure.js and hot-reload openclaw config (picks up any changes)
 AGENTSEOF
   echo "[entrypoint] created AGENTS.md in workspace"
 fi
@@ -186,6 +190,52 @@ rm -rf /tmp/jiti/ 2>/dev/null || true
 echo "[entrypoint] running configure..."
 node /app/scripts/configure.js
 chmod 600 "$STATE_DIR/openclaw.json"
+
+# ── Hot-reload helper ────────────────────────────────────────────────────────
+# Install `oc-reload` command so the agent (or user via exec) can re-run
+# configure.js at runtime.  OpenClaw watches openclaw.json for changes,
+# so this picks up new Telegram users, model changes, etc.
+# without restarting the container.
+cat > /usr/local/bin/oc-reload <<'RELOADEOF'
+#!/bin/bash
+echo "[oc-reload] re-running configure.js..."
+node /app/scripts/configure.js
+chmod 600 "${OPENCLAW_STATE_DIR:-/data/.openclaw}/openclaw.json"
+echo "[oc-reload] done — openclaw will pick up changes automatically"
+RELOADEOF
+chmod +x /usr/local/bin/oc-reload
+
+# Install `oc-allow` command to add Telegram users to the persistent allowlist.
+# Usage: oc-allow 123456789           (add one user)
+#        oc-allow 123456789 987654321 (add multiple)
+# The file /data/config/telegram-allow.txt survives container restarts.
+cat > /usr/local/bin/oc-allow <<'ALLOWEOF'
+#!/bin/bash
+ALLOW_FILE="/data/config/telegram-allow.txt"
+mkdir -p /data/config
+touch "$ALLOW_FILE"
+if [ $# -eq 0 ]; then
+  echo "Usage: oc-allow <telegram_user_id> [<id2> ...]"
+  echo "Current allowlist:"
+  echo "  env: ${TELEGRAM_ALLOW_FROM:-<not set>}"
+  echo "  file: $(cat "$ALLOW_FILE" 2>/dev/null || echo '<empty>')"
+  exit 0
+fi
+for id in "$@"; do
+  if ! grep -qx "$id" "$ALLOW_FILE" 2>/dev/null; then
+    echo "$id" >> "$ALLOW_FILE"
+    echo "[oc-allow] added $id"
+  else
+    echo "[oc-allow] $id already in allowlist"
+  fi
+done
+echo "[oc-allow] reloading config..."
+oc-reload
+ALLOWEOF
+chmod +x /usr/local/bin/oc-allow
+
+# Ensure /data/config exists for the persistent allowlist
+mkdir -p /data/config
 
 # ── Auto-fix doctor suggestions (e.g. enable configured channels) ─────────
 echo "[entrypoint] running openclaw doctor --fix..."

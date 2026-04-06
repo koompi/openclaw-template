@@ -506,10 +506,13 @@ if (kconsoleApiKey && process.env.OPENCLAW_MEMORY_SEARCH !== "false") {
   ensure(config, "plugins", "slots");
   config.plugins.slots.memory = "memory-lancedb-pro";
 
-  // Explicitly disable the built-in memorySearch — it uses local 384d embeddings
-  // and would shadow the plugin, causing dimension mismatch errors.
+  // Enable memorySearch so the agent proactively searches memories via
+  // memory_recall tool.  memory-lancedb-pro intercepts memory_recall and
+  // routes it through its own LanceDB backend (1536d embeddings via our
+  // gateway), so there is no conflict with the built-in 384d local search.
+  // Without this, the plugin stores memories but the agent never searches them.
   ensure(config, "agents", "defaults", "memorySearch");
-  config.agents.defaults.memorySearch.enabled = false;
+  config.agents.defaults.memorySearch.enabled = true;
 
   console.log("[configure] memory search enabled → memory-lancedb-pro via KOOMPI AI Gateway");
   console.log("[configure]   embedding: text-embedding-3-small @ 1536d (→ gemini-embedding-001)");
@@ -559,12 +562,29 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
   if (process.env.TELEGRAM_MEDIA_MAX_MB)            tg.mediaMaxMb = parseInt(process.env.TELEGRAM_MEDIA_MAX_MB, 10);
 
   // csv → array (user IDs as integers, usernames as strings)
-  if (process.env.TELEGRAM_ALLOW_FROM) {
-    tg.allowFrom = process.env.TELEGRAM_ALLOW_FROM.split(",").map(s => {
-      const trimmed = s.trim();
-      const num = Number(trimmed);
-      return Number.isInteger(num) ? num : trimmed;
-    });
+  // Merge: env var TELEGRAM_ALLOW_FROM + persistent file /data/config/telegram-allow.txt
+  // The file survives container restarts; the agent can edit it and run oc-reload.
+  {
+    const parts = [];
+    if (process.env.TELEGRAM_ALLOW_FROM) {
+      parts.push(...process.env.TELEGRAM_ALLOW_FROM.split(","));
+    }
+    try {
+      const filePath = "/data/config/telegram-allow.txt";
+      const fileContent = require("fs").readFileSync(filePath, "utf8");
+      const fileIds = fileContent.split(/[\n,]/).map(s => s.trim()).filter(Boolean).filter(s => !s.startsWith("#"));
+      if (fileIds.length > 0) {
+        parts.push(...fileIds);
+        console.log(`[configure] merged ${fileIds.length} Telegram user(s) from ${filePath}`);
+      }
+    } catch { /* file doesn't exist yet — that's fine */ }
+    if (parts.length > 0) {
+      const unique = [...new Set(parts.map(s => s.trim()).filter(Boolean))];
+      tg.allowFrom = unique.map(s => {
+        const num = Number(s);
+        return Number.isInteger(num) ? num : s;
+      });
+    }
   }
   if (process.env.TELEGRAM_GROUP_ALLOW_FROM) {
     tg.groupAllowFrom = process.env.TELEGRAM_GROUP_ALLOW_FROM.split(",").map(s => {
