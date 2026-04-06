@@ -33,14 +33,14 @@ COPY skills/ /app/skills/
 # can use Excel/PDF/Word/PowerPoint/Image/Charts/QR/Barcode immediately
 # without waiting for pip install on every container start.
 # Also install TikTok uploader deps for social-media-automation skill.
-RUN pip install --break-system-packages --no-cache-dir -q \
+RUN uv pip install --system --no-cache \
     openpyxl pandas xlsxwriter pdfplumber reportlab \
     python-docx python-pptx Pillow matplotlib \
     qrcode python-barcode \
     tiktokautouploader
 
 # Install Phantomwright Chromium driver for TikTok stealth browser automation
-RUN phantomwright_driver install chromium 2>&1 | tail -3 || true
+RUN python3 -c "from phantomwright.driver import install; install('chromium')" 2>&1 | tail -3 || true
 
 # Set Chromium path for Playwright/Phantomwright (Debian package location)
 ENV CHROMIUM_PATH="/usr/bin/chromium" \
