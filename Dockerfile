@@ -33,7 +33,7 @@ COPY skills/ /app/skills/
 # can use Excel/PDF/Word/PowerPoint/Image/Charts/QR/Barcode immediately
 # without waiting for pip install on every container start.
 # Also install TikTok uploader deps for social-media-automation skill.
-RUN uv pip install --system --no-cache \
+RUN uv pip install --system --break-system-packages --no-cache \
     openpyxl pandas xlsxwriter pdfplumber reportlab \
     python-docx python-pptx Pillow matplotlib \
     qrcode python-barcode \
