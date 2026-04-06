@@ -8,6 +8,10 @@ RUN apt-get update \
   && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     nginx \
     apache2-utils \
+    chromium \
+    xvfb \
+    fonts-noto-cjk \
+    fonts-noto-color-emoji \
   && rm -rf /var/lib/apt/lists/*
 
 # Remove default nginx site
@@ -24,6 +28,23 @@ RUN mkdir -p /app/plugins && cd /app/plugins \
 
 # Bundle KOOMPI Cloud skill docs (KConsole, KStorage, AI Gateway)
 COPY skills/ /app/skills/
+
+# Pre-install koompi-office Python dependencies at build time so the agent
+# can use Excel/PDF/Word/PowerPoint/Image/Charts/QR/Barcode immediately
+# without waiting for pip install on every container start.
+# Also install TikTok uploader deps for social-media-automation skill.
+RUN pip install --break-system-packages --no-cache-dir -q \
+    openpyxl pandas xlsxwriter pdfplumber reportlab \
+    python-docx python-pptx Pillow matplotlib \
+    qrcode python-barcode \
+    tiktokautouploader
+
+# Install Phantomwright Chromium driver for TikTok stealth browser automation
+RUN phantomwright_driver install chromium 2>&1 | tail -3 || true
+
+# Set Chromium path for Playwright/Phantomwright (Debian package location)
+ENV CHROMIUM_PATH="/usr/bin/chromium" \
+    PLAYWRIGHT_BROWSERS_PATH="/root/.cache/ms-playwright"
 
 ENV NPM_CONFIG_PREFIX="/data/npm-global" \
     UV_TOOL_DIR="/data/uv/tools" \

@@ -1,0 +1,63 @@
+# Sample Codex Config for KConsole AI Gateway
+# Copy this file to ~/.codex/config.toml and update the API key
+
+model_provider = "kconsole"
+model = "glm-5"
+
+[model_providers.kconsole]
+name = "KConsole AI Gateway (GLM)"
+base_url = "https://ai.koompi.cloud/v1"
+env_key = "KCONSOLE_API_KEY"
+wire_api = "responses"
+compatibility_mode = "openai-chat"
+
+[model_providers.kconsole-gemini]
+name = "KConsole AI Gateway (Gemini)"
+base_url = "https://ai.koompi.cloud/v1"
+env_key = "KCONSOLE_API_KEY"
+wire_api = "responses"
+compatibility_mode = "openai-chat"
+env_http_headers = { X_BACKEND = "gemini" }
+
+[[model_metadata]]
+model_slug = "glm-5"
+context_window = 200000
+supports_reasoning = true
+thinking_mode = true
+
+[[model_metadata]]
+model_slug = "glm-5.1"
+context_window = 200000
+supports_reasoning = true
+thinking_mode = true
+
+[[model_metadata]]
+model_slug = "glm-4.7-flash"
+context_window = 128000
+supports_reasoning = false
+
+[[model_metadata]]
+model_slug = "gemini-3-flash-preview"
+context_window = 1000000
+supports_reasoning = true
+thinking_mode = true
+
+[[model_metadata]]
+model_slug = "gemini-3.1-pro-preview"
+context_window = 1000000
+supports_reasoning = true
+thinking_mode = true
+
+[[model_metadata]]
+model_slug = "gemini-2.5-pro"
+context_window = 1000000
+supports_reasoning = true
+
+[[model_metadata]]
+model_slug = "gemini-2.5-flash"
+context_window = 1000000
+supports_reasoning = true
+
+# Add your projects here for trusted access
+# [projects."/path/to/your/project"]
+# trust_level = "trusted"

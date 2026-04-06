@@ -135,16 +135,24 @@ if [ ! -f "$AGENTS_MD" ]; then
 # KOOMPI Cloud Instructions
 
 This instance runs on KOOMPI Cloud. KOOMPI-specific documentation is in the `koompi-docs/` directory.
+Read `koompi-docs/README.md` for the full skill index.
 
 When the user asks you to:
 - Deploy an app / manage services → read `koompi-docs/kconsole.md`
 - Upload files / get CDN links → read `koompi-docs/kstorage.md`
 - Generate images or videos via AI → read `koompi-docs/kconsole-ai.md`
+- Read/create Excel, PDF, Word, PowerPoint, images, charts, QR codes, barcodes, or OCR → read `koompi-docs/koompi-office/SKILL.md`
+- Post or manage social media (Facebook, Instagram, TikTok, X, etc.) → read `koompi-docs/social-media-automation/SKILL.md`
+- Manage Riverbase/KOOMPI BIZ shop (products, orders, inventory, discounts, storefront) → read `koompi-docs/koompi-biz/SKILL.md`
+- Use Claude Code for coding → read `koompi-docs/claude-code-kconsole/SKILL.md`
+- Use Codex CLI for coding → read `koompi-docs/codex-cli-kconsole/SKILL.md`
 
 The API keys are already available as env vars:
 - `$KCONSOLE_API_TOKEN` — KConsole API
 - `$KSTORAGE_API_KEY` — KStorage
 - `$KCONSOLE_AI_KEY` / `$AI_GATEWAY_API_KEY` — AI Gateway (https://ai.koompi.cloud/v1)
+
+Pre-installed tools: Chromium (headless browser), Python with pandas/openpyxl/reportlab/Pillow/matplotlib, uv, Go, Node.js, Linuxbrew.
 AGENTSEOF
   echo "[entrypoint] created AGENTS.md in workspace"
 fi
@@ -219,8 +227,8 @@ if [ -n "$HOOKS_PATH" ]; then
         proxy_set_header Authorization \\\$http_authorization;
 
         proxy_set_header Host \\\$host;
-        proxy_set_header X-Real-IP \\\$remote_addr;
-        proxy_set_header X-Forwarded-For \\\$remote_addr;
+        proxy_set_header X-Real-IP 127.0.0.1;
+        proxy_set_header X-Forwarded-For 127.0.0.1;
         proxy_set_header X-Forwarded-Proto \\\$scheme;
 
         proxy_http_version 1.1;
@@ -246,8 +254,8 @@ if [ -n "${ENABLE_BROWSER_SIDECAR:-}" ]; then
 
         proxy_pass http://${BROWSER_SIDECAR_HOST}:${BROWSER_SIDECAR_PORT}/;
         proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$remote_addr;
+        proxy_set_header X-Real-IP 127.0.0.1;
+        proxy_set_header X-Forwarded-For 127.0.0.1;
         proxy_set_header X-Forwarded-Proto \$scheme;
 
         proxy_http_version 1.1;
@@ -336,8 +344,8 @@ server {
         proxy_set_header Authorization "Bearer ${GATEWAY_TOKEN}";
 
         proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$remote_addr;
+        proxy_set_header X-Real-IP 127.0.0.1;
+        proxy_set_header X-Forwarded-For 127.0.0.1;
         proxy_set_header X-Forwarded-Proto \$scheme;
 
         proxy_http_version 1.1;
@@ -366,6 +374,63 @@ nginx
 # ── Clean up stale lock files ────────────────────────────────────────────────
 rm -f /tmp/openclaw-gateway.lock 2>/dev/null || true
 rm -f "$STATE_DIR/gateway.lock" 2>/dev/null || true
+
+# ── Fix device scopes in paired.json ────────────────────────────────────────
+# When the Telegram channel auto-pairs a device it only gets "operator.approvals"
+# scope.  The agent's internal tools (cron, browser, gateway) need "operator.read"
+# and "operator.write".  This fixer widens existing devices at startup (for
+# container restarts) and runs in the background to catch first-run pairing.
+PAIR_FILE="$STATE_DIR/devices/paired.json"
+
+fix_device_scopes() {
+  [ -f "$PAIR_FILE" ] || return 1
+  python3 -c "
+import json, sys, os
+pf = '$PAIR_FILE'
+with open(pf) as f:
+    data = json.load(f)
+changed = False
+needed = ['operator.read', 'operator.write']
+for dev in data.values():
+    if not isinstance(dev, dict):
+        continue
+    scopes = dev.get('scopes', [])
+    approved = dev.get('approvedScopes', [])
+    for s in needed:
+        if s not in scopes:
+            scopes.append(s)
+            changed = True
+        if s not in approved:
+            approved.append(s)
+            changed = True
+    dev['scopes'] = scopes
+    dev['approvedScopes'] = approved
+    for tok in dev.get('tokens', {}).values():
+        if not isinstance(tok, dict):
+            continue
+        ts = tok.get('scopes', [])
+        for s in needed:
+            if s not in ts:
+                ts.append(s)
+                changed = True
+        tok['scopes'] = ts
+if changed:
+    with open(pf, 'w') as f:
+        json.dump(data, f, indent=2)
+    print('[scope-fix] Device scopes updated — added operator.read + operator.write')
+" 2>/dev/null
+}
+
+# Fix now (handles container restart with persisted paired.json)
+fix_device_scopes || true
+
+# Background watcher: fix scopes when paired.json appears after first Telegram pairing
+(
+  while true; do
+    sleep 30
+    fix_device_scopes 2>/dev/null && break
+  done
+) &
 
 # ── Start openclaw gateway ───────────────────────────────────────────────────
 echo "[entrypoint] starting openclaw gateway on port $GATEWAY_PORT..."

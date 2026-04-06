@@ -1,0 +1,9 @@
+.env
+*.pyc
+__pycache__/
+.venv/
+node_modules/
+*.log
+.DS_Store
+TK_cookies_*.json
+*.mp4
