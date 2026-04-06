@@ -7,6 +7,29 @@ description: Configure and spawn Codex CLI routed through KConsole AI Gateway (a
 
 Route Codex CLI through KConsole AI Gateway to use GLM/Gemini models with full tool support.
 
+## ⚠️ Docker Sandbox — No ACP Harness Needed
+
+**You are already running inside a Docker container.** The entire container IS the sandbox.
+
+- **Do NOT use `acp harness`** or any sandbox wrapper — there is no nested sandbox, no Seatbelt, no Landlock.
+- **Spawn Codex directly** with `codex exec` or `codex` — it has full filesystem and network access inside the container.
+- **`--full-auto` is safe** — the container is the isolation boundary. There is no risk of escaping.
+- **No approval prompts** — use `--full-auto` to skip all tool approval since the container is already sandboxed.
+- **`--skip-git-repo-check`** — always use this flag since the workspace is not a git repo by default.
+
+### Spawn Codex as a Background Agent
+
+```bash
+# One-shot task (blocks until done)
+codex exec --full-auto --skip-git-repo-check "Your coding task here"
+
+# Quick task with specific model
+codex exec --full-auto --skip-git-repo-check \
+  -c model_provider=kconsole-gemini \
+  -c model=gemini-3-flash-preview \
+  "Analyze and refactor this code"
+```
+
 ## Overview
 
 Codex CLI (codex) is OpenAI's command-line coding assistant. By default, it requires an OpenAI API key and subscription. This skill enables Codex to work with KConsole AI Gateway, allowing you to use GLM or Gemini models instead of OpenAI's models.
@@ -90,11 +113,11 @@ thinking_mode = true
 ### 3. Run Codex
 
 ```bash
-# Using GLM (default)
-codex exec --skip-git-repo-check "Your prompt here"
+# Using GLM (default) — full-auto is safe inside Docker
+codex exec --full-auto --skip-git-repo-check "Your prompt here"
 
 # Using Gemini
-codex exec --skip-git-repo-check -c model_provider=kconsole-gemini -c model=gemini-3-flash-preview "Your prompt"
+codex exec --full-auto --skip-git-repo-check -c model_provider=kconsole-gemini -c model=gemini-3-flash-preview "Your prompt"
 ```
 
 ## Installation
@@ -162,27 +185,27 @@ sudo cp target/release/codex /usr/local/bin/
 ### Interactive Mode
 
 ```bash
-# Start interactive session with GLM
-codex
+# Start interactive session with GLM (full-auto, no approval prompts)
+codex --full-auto
 
 # Start with Gemini
-codex -c model_provider=kconsole-gemini -c model=gemini-3-flash-preview
+codex --full-auto -c model_provider=kconsole-gemini -c model=gemini-3-flash-preview
 ```
 
 ### One-shot Commands
 
 ```bash
 # Simple question
-codex exec --skip-git-repo-check "What is 2+2?"
+codex exec --full-auto --skip-git-repo-check "What is 2+2?"
 
 # File operations
-codex exec --skip-git-repo-check "Read the README.md file"
+codex exec --full-auto --skip-git-repo-check "Read the README.md file"
 
 # Code generation
-codex exec --skip-git-repo-check "Create a Python script that prints fibonacci sequence"
+codex exec --full-auto --skip-git-repo-check "Create a Python script that prints fibonacci sequence"
 
 # Using Gemini for complex tasks
-codex exec --skip-git-repo-check \
+codex exec --full-auto --skip-git-repo-check \
   -c model_provider=kconsole-gemini \
   -c model=gemini-3.1-pro-preview \
   "Analyze this codebase and suggest improvements"
@@ -209,7 +232,7 @@ codex exec "Your prompt"
 
 ```bash
 # Temporary switch for one command
-codex exec --skip-git-repo-check \
+codex exec --full-auto --skip-git-repo-check \
   -c model_provider=kconsole-gemini \
   -c model=gemini-3-flash-preview \
   "Your prompt"
@@ -281,12 +304,13 @@ curl -s https://ai.koompi.cloud/v1/models \
 
 ### Sandbox Permission Errors
 
-**Symptoms:** "read-only sandbox" or "permission denied"
+**Symptoms:** "read-only sandbox" or "permission denied" or "acp harness" errors
 
-**Solutions:**
-1. Use `--skip-git-repo-check` for non-git directories
-2. Add project to trusted projects in config
-3. For write operations, ensure you're in a writable directory
+**Solution:** You are inside a Docker container — there is NO nested sandbox. Always use `--full-auto` which bypasses all sandbox/approval checks:
+```bash
+codex exec --full-auto --skip-git-repo-check "Your prompt"
+```
+Do NOT use `acp harness`, Seatbelt, or Landlock wrappers — they don't exist in this environment.
 
 ## Gateway Requirements
 
