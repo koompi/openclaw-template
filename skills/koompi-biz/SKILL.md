@@ -48,6 +48,9 @@ Load **only** the file relevant to the user's request:
 | [admin/shipping.md](skills/admin/shipping.md) | "shipping fee", "delivery zones", "add delivery option" |
 | [admin/discounts.md](skills/admin/discounts.md) | "create coupon", "discount rule", "sale on product" |
 | [admin/sections.md](skills/admin/sections.md) | "create section", "add banner", "homepage layout", "design", "storefront" |
+| [admin/appearance.md](skills/admin/appearance.md) | "change theme", "custom colors", "shop appearance", "upload font", "change font", "border radius", "dark mode", "branding", "reset theme" |
+| [admin/customer-auth.md](skills/admin/customer-auth.md) | "customer login", "telegram auth", "user token", "initData", "connect account", "register user", "customer JWT" |
+| [admin/customer-service-agent.md](skills/admin/customer-service-agent.md) | "build CS bot", "customer service agent", "shop bot", "telegram bot for customers", "AI assistant for shop", "OpenClaw agent" |
 
 ### Advanced Features
 | File | Use when user says… |

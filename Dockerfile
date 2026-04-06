@@ -10,6 +10,7 @@ RUN apt-get update \
     apache2-utils \
     chromium \
     xvfb \
+    ffmpeg \
     fonts-noto-cjk \
     fonts-noto-color-emoji \
   && rm -rf /var/lib/apt/lists/*
