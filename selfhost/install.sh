@@ -6,19 +6,22 @@
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
+# When piped (curl | bash), stdin is the pipe — read from /dev/tty for prompts
+if [ -t 0 ]; then
+  TTY_IN="/dev/stdin"
+else
+  TTY_IN="/dev/tty"
+fi
+
 # ── Defaults ─────────────────────────────────────────────────────────────────
 KCONSOLE_API="${KCONSOLE_API:-https://api-kconsole.koompi.cloud}"
 KCONSOLE_FRONTEND="${KCONSOLE_FRONTEND:-https://kconsole.koompi.cloud}"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/openclaw}"
 PORT="${PORT:-8080}"
 
-# Colors (disabled when not a tty)
-if [ -t 1 ]; then
-  RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
-  BLUE='\033[0;34m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
-else
-  RED=''; GREEN=''; YELLOW=''; BLUE=''; CYAN=''; BOLD=''; NC=''
-fi
+# Colors (always enable — output goes to terminal even when stdin is piped)
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
+BLUE='\033[0;34m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 info()  { printf "${BLUE}ℹ${NC}  %s\n" "$*"; }
@@ -40,12 +43,11 @@ check_cmd() {
 echo ""
 printf "${BOLD}${CYAN}"
 cat << 'EOF'
-   ___                    ____ _
-  / _ \ _ __   ___ _ __  / ___| | __ ___      __
- | | | | '_ \ / _ \ '_ \| |   | |/ _` \ \ /\ / /
- | |_| | |_) |  __/ | | | |___| | (_| |\ V  V /
-  \___/| .__/ \___|_| |_|\____|_|\__,_| \_/\_/
-       |_|
+  _  _____  ____  __  __ ____ ___  ____  _
+ | |/ / _ \/ __ \|  \/  |  _ \_ _|/ ___|| | __ ___      __
+ | ' / | | | |  | | |\/| | |_) | || |   | |/ _` \ \ /\ / /
+ | . \ |_| | |__| | |  | |  __/| || |___| | (_| |\ V  V /
+ |_|\_\___/ \____/|_|  |_|_|  |___|\____|_|\__,_| \_/\_/
 EOF
 printf "${NC}"
 echo ""
@@ -135,7 +137,7 @@ echo "────────────────────────�
 printf "${BOLD}  AI Provider Setup${NC}\n"
 echo "─────────────────────────────────────────────"
 echo ""
-echo "  1) ${GREEN}KConsole AI Gateway${NC} (recommended)"
+printf "  1) ${GREEN}KConsole AI Gateway${NC} (recommended)\n"
 echo "     Access 20+ models via one key. Includes KStorage."
 echo ""
 echo "  2) Bring Your Own Key (BYOK)"
@@ -143,7 +145,7 @@ echo "     Use your own Anthropic/OpenAI/etc. API key."
 echo ""
 
 ask "Choose [1/2]:"
-read -r PROVIDER_CHOICE
+read -r PROVIDER_CHOICE < $TTY_IN
 PROVIDER_CHOICE="${PROVIDER_CHOICE:-1}"
 
 KCONSOLE_AI_KEY=""
@@ -259,7 +261,7 @@ elif [ "$PROVIDER_CHOICE" = "2" ]; then
   echo "    e) Other       (enter variable name)"
   echo ""
   ask "Choose [a-e]:"
-  read -r KEY_CHOICE
+  read -r KEY_CHOICE < $TTY_IN
 
   case "${KEY_CHOICE:-a}" in
     a) VAR_NAME="ANTHROPIC_API_KEY" ;;
@@ -268,13 +270,13 @@ elif [ "$PROVIDER_CHOICE" = "2" ]; then
     d) VAR_NAME="GEMINI_API_KEY" ;;
     e)
       ask "Environment variable name:"
-      read -r VAR_NAME
+      read -r VAR_NAME < $TTY_IN
       ;;
     *) VAR_NAME="ANTHROPIC_API_KEY" ;;
   esac
 
   ask "Enter your API key:"
-  read -rs API_KEY_VALUE
+  read -rs API_KEY_VALUE < $TTY_IN
   echo ""
 
   if [ -z "$API_KEY_VALUE" ]; then
@@ -298,7 +300,7 @@ echo ""
 
 # Password
 ask "Set a password for the web UI (leave empty to auto-generate):"
-read -rs AUTH_PASSWORD
+read -rs AUTH_PASSWORD < $TTY_IN
 echo ""
 
 if [ -z "$AUTH_PASSWORD" ]; then
@@ -307,15 +309,15 @@ if [ -z "$AUTH_PASSWORD" ]; then
 fi
 
 ask "Username [admin]:"
-read -r AUTH_USERNAME
+read -r AUTH_USERNAME < $TTY_IN
 AUTH_USERNAME="${AUTH_USERNAME:-admin}"
 
 ask "Port [${PORT}]:"
-read -r USER_PORT
+read -r USER_PORT < $TTY_IN
 PORT="${USER_PORT:-$PORT}"
 
 ask "Install directory [${INSTALL_DIR}]:"
-read -r USER_DIR
+read -r USER_DIR < $TTY_IN
 INSTALL_DIR="${USER_DIR:-$INSTALL_DIR}"
 
 echo ""
