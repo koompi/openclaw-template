@@ -571,6 +571,66 @@ fi  # end of config prompts
 echo ""
 
 # ══════════════════════════════════════════════════════════════════════════════
+# 3.5 Firewall hardening (optional)
+# ══════════════════════════════════════════════════════════════════════════════
+FIREWALL_TOOL=""
+if command -v ufw >/dev/null 2>&1; then
+  FIREWALL_TOOL="ufw"
+elif command -v firewall-cmd >/dev/null 2>&1; then
+  FIREWALL_TOOL="firewalld"
+fi
+
+if [ -n "$FIREWALL_TOOL" ]; then
+  echo "─────────────────────────────────────────────"
+  printf "${BOLD}  Firewall Security${NC}\n"
+  echo "─────────────────────────────────────────────"
+  echo ""
+  warn "Many VPS providers (DigitalOcean, Vultr, etc.) have all ports open by default."
+  info "We can configure the firewall to only allow necessary ports:"
+  echo ""
+  if [ "${ENABLE_HTTPS:-false}" = "true" ]; then
+    echo "    • Port 22   (SSH)"
+    echo "    • Port ${PORT}  (OpenClaw HTTPS)"
+  else
+    echo "    • Port 22   (SSH)"
+    echo "    • Port ${PORT}  (OpenClaw)"
+  fi
+  echo ""
+  ask "Secure firewall? (only open the ports above) [y/N]:"
+  read -r SECURE_FW < $TTY_IN
+  SECURE_FW="${SECURE_FW:-n}"
+
+  if echo "$SECURE_FW" | grep -qi '^y'; then
+    if [ "$FIREWALL_TOOL" = "ufw" ]; then
+      info "Configuring UFW..."
+      # Ensure SSH is allowed before enabling (prevent lockout)
+      sudo ufw allow 22/tcp comment "SSH" >/dev/null 2>&1
+      sudo ufw allow "${PORT}/tcp" comment "OpenClaw" >/dev/null 2>&1
+      # Enable ufw (--force avoids interactive prompt)
+      sudo ufw --force enable >/dev/null 2>&1
+      ok "UFW enabled. Allowed ports: 22, ${PORT}"
+    elif [ "$FIREWALL_TOOL" = "firewalld" ]; then
+      info "Configuring firewalld..."
+      sudo firewall-cmd --permanent --add-port=22/tcp >/dev/null 2>&1
+      sudo firewall-cmd --permanent --add-port="${PORT}/tcp" >/dev/null 2>&1
+      sudo firewall-cmd --reload >/dev/null 2>&1
+      ok "firewalld configured. Allowed ports: 22, ${PORT}"
+    fi
+    echo ""
+  else
+    info "Skipping firewall setup."
+    echo ""
+  fi
+else
+  # No firewall tool found — warn the user
+  warn "No firewall (ufw/firewalld) detected."
+  info "If this is a public VPS, consider installing one:"
+  echo "    Ubuntu/Debian:  sudo apt install ufw && sudo ufw enable"
+  echo "    CentOS/RHEL:    sudo yum install firewalld && sudo systemctl enable --now firewalld"
+  echo ""
+fi
+
+# ══════════════════════════════════════════════════════════════════════════════
 # 4. Write files
 # ══════════════════════════════════════════════════════════════════════════════
 info "Setting up ${INSTALL_DIR}..."
@@ -784,6 +844,7 @@ if [ "$HEALTHY" = "true" ]; then
   printf "│   URL:      ${NC}${BOLD}%-38s${GREEN}${BOLD}│\n" "${APP_URL}"
   printf "│   Username: ${NC}${BOLD}%-37s${GREEN}${BOLD}│\n" "${AUTH_USERNAME}"
   printf "│   Password: ${NC}${BOLD}%-37s${GREEN}${BOLD}│\n" "${AUTH_PASSWORD}"
+  printf "│   Gateway:  ${NC}${BOLD}%-37s${GREEN}${BOLD}│\n" "${OPENCLAW_GATEWAY_TOKEN}"
   echo "│                                                 │"
   echo "└─────────────────────────────────────────────────┘"
   printf "${NC}\n"
