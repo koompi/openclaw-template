@@ -220,7 +220,7 @@ if [ "$REUSE_ENV" = "true" ]; then
   if [ -n "$EXISTING_OPENCLAW_IMAGE" ]; then
     OPENCLAW_IMAGE="$EXISTING_OPENCLAW_IMAGE"
   elif [ -n "$KCONSOLE_AI_KEY" ]; then
-    OPENCLAW_IMAGE="image.koompi.org/kconsole/openclaw:latest"
+    OPENCLAW_IMAGE="image.koompi.org/koompiclaw/openclaw:latest"
   else
     OPENCLAW_IMAGE="coollabsio/openclaw:latest"
   fi
