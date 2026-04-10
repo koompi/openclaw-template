@@ -242,6 +242,7 @@ if [ "$REUSE_ENV" = "true" ]; then
     PORT=$(read_env_val PORT)
     PORT="${PORT:-8080}"
     OPENCLAW_GATEWAY_TOKEN=$(read_env_val OPENCLAW_GATEWAY_TOKEN)
+    OPENCLAW_ALLOWED_ORIGINS=$(read_env_val OPENCLAW_ALLOWED_ORIGINS)
     info "Reusing existing configuration."
     echo ""
   fi
@@ -457,6 +458,8 @@ read -rs TELEGRAM_BOT_TOKEN < $TTY_IN
 echo ""
 
 if [ -n "$TELEGRAM_BOT_TOKEN" ]; then
+  MASKED_TOKEN="${TELEGRAM_BOT_TOKEN:0:6}****${TELEGRAM_BOT_TOKEN: -4}"
+  ok "Bot token set (${MASKED_TOKEN})"
   ask "Allowed Telegram user IDs (comma-separated):"
   read -r TELEGRAM_ALLOW_FROM < $TTY_IN
   if [ -z "$TELEGRAM_ALLOW_FROM" ]; then
@@ -491,6 +494,23 @@ echo ""
 info "Setting up ${INSTALL_DIR}..."
 mkdir -p "${INSTALL_DIR}"
 
+# Auto-detect public IP for allowed origins
+if [ -z "${OPENCLAW_ALLOWED_ORIGINS:-}" ]; then
+  PUBLIC_IP=""
+  if [ "$HTTP_CLIENT" = "curl" ]; then
+    PUBLIC_IP=$(curl -sf --max-time 5 https://ifconfig.me 2>/dev/null || curl -sf --max-time 5 https://api.ipify.org 2>/dev/null || true)
+  else
+    PUBLIC_IP=$(wget -qO- --timeout=5 https://ifconfig.me 2>/dev/null || wget -qO- --timeout=5 https://api.ipify.org 2>/dev/null || true)
+  fi
+  if [ -n "$PUBLIC_IP" ]; then
+    OPENCLAW_ALLOWED_ORIGINS="http://${PUBLIC_IP}:${PORT},http://localhost:${PORT},http://127.0.0.1:${PORT}"
+    info "Detected public IP: ${PUBLIC_IP}"
+  else
+    OPENCLAW_ALLOWED_ORIGINS="http://localhost:${PORT},http://127.0.0.1:${PORT}"
+    warn "Could not detect public IP. Add your IP/domain to OPENCLAW_ALLOWED_ORIGINS in .env if needed."
+  fi
+fi
+
 # Generate gateway token (reuse existing if available)
 if [ -z "${OPENCLAW_GATEWAY_TOKEN:-}" ]; then
   OPENCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32 2>/dev/null || head -c 64 /dev/urandom | od -An -tx1 | tr -d ' \n' | head -c 64)
@@ -505,6 +525,7 @@ PORT=${PORT}
 AUTH_USERNAME=${AUTH_USERNAME}
 AUTH_PASSWORD=${AUTH_PASSWORD}
 OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}
+OPENCLAW_ALLOWED_ORIGINS=${OPENCLAW_ALLOWED_ORIGINS}
 
 # KConsole Cloud Keys
 KCONSOLE_AI_KEY=${KCONSOLE_AI_KEY}
