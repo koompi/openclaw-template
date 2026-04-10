@@ -131,6 +131,123 @@ fi
 echo ""
 
 # ══════════════════════════════════════════════════════════════════════════════
+# 1.5 Detect existing installation
+# ══════════════════════════════════════════════════════════════════════════════
+REUSE_ENV=false
+EXISTING_KCONSOLE_AI_KEY=""
+EXISTING_KCONSOLE_API_TOKEN=""
+EXISTING_KSTORAGE_API_KEY=""
+EXISTING_BYOK_VARS=""
+EXISTING_OPENCLAW_IMAGE=""
+EXISTING_TELEGRAM_BOT_TOKEN=""
+EXISTING_TELEGRAM_ALLOW_FROM=""
+
+# Helper: read a value from an existing .env file
+read_env_val() {
+  grep "^${1}=" "${INSTALL_DIR}/.env" 2>/dev/null | head -1 | cut -d'=' -f2-
+}
+
+if [ -f "${INSTALL_DIR}/.env" ]; then
+  echo "─────────────────────────────────────────────"
+  printf "${BOLD}  Existing Installation Detected${NC}\n"
+  echo "─────────────────────────────────────────────"
+  echo ""
+  info "Found existing config at ${BOLD}${INSTALL_DIR}/.env${NC}"
+  echo ""
+  echo "  1) Reinstall (keep existing API keys & config)"
+  echo "  2) Reconfigure (keep API keys, change settings)"
+  echo "  3) Update images only (pull latest & restart)"
+  echo "  4) Fresh install (new auth & provisioning)"
+  echo ""
+  ask "Choose [1-4]:"
+  read -r REINSTALL_CHOICE < $TTY_IN
+  REINSTALL_CHOICE="${REINSTALL_CHOICE:-1}"
+  echo ""
+
+  if [ "$REINSTALL_CHOICE" = "3" ]; then
+    # ── Update only: pull + restart, then exit ─────────────────────────────
+    info "Pulling latest images..."
+    (cd "${INSTALL_DIR}" && $COMPOSE_CMD pull)
+    echo ""
+    info "Restarting..."
+    (cd "${INSTALL_DIR}" && $COMPOSE_CMD up -d)
+    echo ""
+    ok "Updated! OpenClaw is running at http://localhost:$(read_env_val PORT)"
+    exit 0
+  fi
+
+  if [ "$REINSTALL_CHOICE" = "1" ] || [ "$REINSTALL_CHOICE" = "2" ]; then
+    # Read existing keys from .env
+    EXISTING_KCONSOLE_AI_KEY=$(read_env_val KCONSOLE_AI_KEY)
+    EXISTING_KCONSOLE_API_TOKEN=$(read_env_val KCONSOLE_API_TOKEN)
+    EXISTING_KSTORAGE_API_KEY=$(read_env_val KSTORAGE_API_KEY)
+    EXISTING_TELEGRAM_BOT_TOKEN=$(read_env_val TELEGRAM_BOT_TOKEN)
+    EXISTING_TELEGRAM_ALLOW_FROM=$(read_env_val TELEGRAM_ALLOW_FROM)
+
+    # Detect which image was used from docker-compose.yml
+    if [ -f "${INSTALL_DIR}/docker-compose.yml" ]; then
+      EXISTING_OPENCLAW_IMAGE=$(grep 'image:' "${INSTALL_DIR}/docker-compose.yml" | head -1 | awk '{print $2}')
+    fi
+
+    # Check for BYOK keys
+    for var in ANTHROPIC_API_KEY OPENAI_API_KEY OPENROUTER_API_KEY GEMINI_API_KEY; do
+      val=$(read_env_val "$var")
+      if [ -n "$val" ]; then
+        EXISTING_BYOK_VARS="${var}=${val}"
+        break
+      fi
+    done
+
+    if [ -n "$EXISTING_KCONSOLE_AI_KEY" ] || [ -n "$EXISTING_BYOK_VARS" ]; then
+      REUSE_ENV=true
+      ok "Loaded existing API keys from .env"
+    else
+      warn "No API keys found in existing .env — will run fresh setup."
+    fi
+  fi
+  # REINSTALL_CHOICE=4 falls through to fresh install (REUSE_ENV stays false)
+fi
+
+if [ "$REUSE_ENV" = "true" ]; then
+  # ── Reuse existing keys ────────────────────────────────────────────────
+  KCONSOLE_AI_KEY="$EXISTING_KCONSOLE_AI_KEY"
+  KCONSOLE_API_TOKEN="$EXISTING_KCONSOLE_API_TOKEN"
+  KSTORAGE_API_KEY="$EXISTING_KSTORAGE_API_KEY"
+  BYOK_VARS="$EXISTING_BYOK_VARS"
+  TELEGRAM_BOT_TOKEN="$EXISTING_TELEGRAM_BOT_TOKEN"
+  TELEGRAM_ALLOW_FROM="$EXISTING_TELEGRAM_ALLOW_FROM"
+
+  if [ -n "$EXISTING_OPENCLAW_IMAGE" ]; then
+    OPENCLAW_IMAGE="$EXISTING_OPENCLAW_IMAGE"
+  elif [ -n "$KCONSOLE_AI_KEY" ]; then
+    OPENCLAW_IMAGE="image.koompi.org/kconsole/openclaw:latest"
+  else
+    OPENCLAW_IMAGE="coollabsio/openclaw:latest"
+  fi
+
+  # Determine model from existing config
+  OPENCLAW_PRIMARY_MODEL=$(read_env_val OPENCLAW_PRIMARY_MODEL)
+  if [ -z "$OPENCLAW_PRIMARY_MODEL" ]; then
+    if [ -n "$KCONSOLE_AI_KEY" ]; then
+      OPENCLAW_PRIMARY_MODEL="kconsole/glm-5-turbo"
+    else
+      OPENCLAW_PRIMARY_MODEL="opencode/kimi-k2.5"
+    fi
+  fi
+
+  if [ "$REINSTALL_CHOICE" = "1" ]; then
+    # Full reinstall — also reuse config values
+    AUTH_PASSWORD=$(read_env_val AUTH_PASSWORD)
+    AUTH_USERNAME=$(read_env_val AUTH_USERNAME)
+    PORT=$(read_env_val PORT)
+    PORT="${PORT:-8080}"
+    info "Reusing existing configuration."
+    echo ""
+  fi
+  # REINSTALL_CHOICE=2 falls through to the config prompts below
+else
+
+# ══════════════════════════════════════════════════════════════════════════════
 # 2. Choose AI provider
 # ══════════════════════════════════════════════════════════════════════════════
 echo "─────────────────────────────────────────────"
@@ -152,6 +269,8 @@ KCONSOLE_AI_KEY=""
 KCONSOLE_API_TOKEN=""
 KSTORAGE_API_KEY=""
 BYOK_VARS=""
+TELEGRAM_BOT_TOKEN=""
+TELEGRAM_ALLOW_FROM=""
 
 if [ "$PROVIDER_CHOICE" = "1" ]; then
   # ── KConsole device-code auth ────────────────────────────────────────────
@@ -249,6 +368,7 @@ if [ "$PROVIDER_CHOICE" = "1" ]; then
 
   ok "Resources provisioned!"
   OPENCLAW_IMAGE="image.koompi.org/kconsole/openclaw:latest"
+  OPENCLAW_PRIMARY_MODEL="kconsole/glm-5-turbo"
   echo ""
 
 elif [ "$PROVIDER_CHOICE" = "2" ]; then
@@ -286,15 +406,23 @@ elif [ "$PROVIDER_CHOICE" = "2" ]; then
 
   BYOK_VARS="${VAR_NAME}=${API_KEY_VALUE}"
   OPENCLAW_IMAGE="coollabsio/openclaw:latest"
+  OPENCLAW_PRIMARY_MODEL="opencode/kimi-k2.5"
   ok "API key set for ${VAR_NAME}"
   echo ""
 else
   fail "Invalid choice. Run the installer again."
 fi
 
+fi  # end of REUSE_ENV=false (fresh install) block
+
 # ══════════════════════════════════════════════════════════════════════════════
 # 3. Configuration
 # ══════════════════════════════════════════════════════════════════════════════
+# Skip config prompts if doing a full reinstall (choice 1) with reused config
+if [ "$REUSE_ENV" = "true" ] && [ "${REINSTALL_CHOICE:-}" = "1" ]; then
+  : # config already loaded above
+else
+
 echo "─────────────────────────────────────────────"
 printf "${BOLD}  Configuration${NC}\n"
 echo "─────────────────────────────────────────────"
@@ -351,6 +479,8 @@ ask "Install directory [${INSTALL_DIR}]:"
 read -r USER_DIR < $TTY_IN
 INSTALL_DIR="${USER_DIR:-$INSTALL_DIR}"
 
+fi  # end of config prompts
+
 echo ""
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -382,8 +512,8 @@ TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
 TELEGRAM_ALLOW_FROM=${TELEGRAM_ALLOW_FROM}
 TELEGRAM_DM_POLICY=allowlist
 
-# Model (auto-selected if empty)
-# OPENCLAW_PRIMARY_MODEL=opencode/kimi-k2.5
+# Model
+OPENCLAW_PRIMARY_MODEL=${OPENCLAW_PRIMARY_MODEL}
 ENVEOF
 
 ok "Wrote ${INSTALL_DIR}/.env"
@@ -398,8 +528,6 @@ services:
     env_file:
       - .env
     environment:
-      - OPENCODE_API_KEY=\${KCONSOLE_AI_KEY}
-      - OPENCLAW_PRIMARY_MODEL=opencode/kimi-k2.5
       - BROWSER_CDP_URL=http://browser:9223
       - BROWSER_DEFAULT_PROFILE=openclaw
       - BROWSER_EVALUATE_ENABLED=true
@@ -441,9 +569,9 @@ info "Starting OpenClaw..."
 echo ""
 
 # ── Health check ─────────────────────────────────────────────────────────────
-info "Waiting for OpenClaw to start..."
+info "Waiting for OpenClaw to start (this can take up to 2 minutes)..."
 HEALTHY=false
-for i in $(seq 1 30); do
+for i in $(seq 1 60); do
   if [ "$HTTP_CLIENT" = "curl" ]; then
     STATUS=$(curl -sf -o /dev/null -w '%{http_code}' "http://localhost:${PORT}/healthz" 2>/dev/null) || STATUS="000"
   else
@@ -470,7 +598,7 @@ if [ "$HEALTHY" = "true" ]; then
   echo "└─────────────────────────────────────────────────┘"
   printf "${NC}\n"
 else
-  warn "OpenClaw did not respond within 60 seconds."
+  warn "OpenClaw did not respond within 2 minutes."
   warn "Check logs with: cd ${INSTALL_DIR} && ${COMPOSE_CMD} logs -f"
 fi
 
