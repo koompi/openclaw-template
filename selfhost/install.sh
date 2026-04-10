@@ -152,7 +152,7 @@ if [ -f "${INSTALL_DIR}/.env" ]; then
   printf "${BOLD}  Existing Installation Detected${NC}\n"
   echo "─────────────────────────────────────────────"
   echo ""
-  info "Found existing config at ${BOLD}${INSTALL_DIR}/.env${NC}"
+  printf "${BLUE}ℹ${NC}  Found existing config at ${BOLD}%s${NC}\n" "${INSTALL_DIR}/.env"
   echo ""
   echo "  1) Reinstall (keep existing API keys & config)"
   echo "  2) Reconfigure (keep API keys, change settings)"
@@ -413,7 +413,7 @@ else
   fail "Invalid choice. Run the installer again."
 fi
 
-fi  # end of REUSE_ENV=false (fresh install) block
+fi  # end of if REUSE_ENV (else = fresh install block)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 3. Configuration
@@ -435,7 +435,7 @@ echo ""
 
 if [ -z "$AUTH_PASSWORD" ]; then
   AUTH_PASSWORD=$(openssl rand -base64 12 2>/dev/null || head -c 16 /dev/urandom | base64 | tr -d '=+/' | head -c 12)
-  info "Generated password: ${BOLD}${AUTH_PASSWORD}${NC}"
+  printf "${BLUE}ℹ${NC}  Generated password: ${BOLD}%s${NC}\n" "${AUTH_PASSWORD}"
 fi
 
 ask "Username [admin]:"
