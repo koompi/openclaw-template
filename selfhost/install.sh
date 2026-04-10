@@ -452,7 +452,8 @@ info "Create a bot with @BotFather to get a token."
 echo ""
 
 ask "Telegram Bot Token (leave empty to skip):"
-read -r TELEGRAM_BOT_TOKEN < $TTY_IN
+read -rs TELEGRAM_BOT_TOKEN < $TTY_IN
+echo ""
 
 if [ -n "$TELEGRAM_BOT_TOKEN" ]; then
   ask "Allowed Telegram user IDs (comma-separated):"
