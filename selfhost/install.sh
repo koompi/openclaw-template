@@ -248,6 +248,7 @@ if [ "$PROVIDER_CHOICE" = "1" ]; then
   KSTORAGE_API_KEY=$(echo "$PROV_RESPONSE" | grep -o '"KSTORAGE_API_KEY":"[^"]*"' | cut -d'"' -f4)
 
   ok "Resources provisioned!"
+  OPENCLAW_IMAGE="image.koompi.org/kconsole/openclaw:latest"
   echo ""
 
 elif [ "$PROVIDER_CHOICE" = "2" ]; then
@@ -284,6 +285,7 @@ elif [ "$PROVIDER_CHOICE" = "2" ]; then
   fi
 
   BYOK_VARS="${VAR_NAME}=${API_KEY_VALUE}"
+  OPENCLAW_IMAGE="coollabsio/openclaw:latest"
   ok "API key set for ${VAR_NAME}"
   echo ""
 else
@@ -311,6 +313,35 @@ fi
 ask "Username [admin]:"
 read -r AUTH_USERNAME < $TTY_IN
 AUTH_USERNAME="${AUTH_USERNAME:-admin}"
+
+echo ""
+echo "─────────────────────────────────────────────"
+printf "${BOLD}  Telegram Notification${NC}\n"
+echo "─────────────────────────────────────────────"
+echo ""
+info "OpenClaw can send notifications via Telegram."
+info "Create a bot with @BotFather to get a token."
+echo ""
+
+ask "Telegram Bot Token (leave empty to skip):"
+read -r TELEGRAM_BOT_TOKEN < $TTY_IN
+
+if [ -n "$TELEGRAM_BOT_TOKEN" ]; then
+  ask "Allowed Telegram user IDs (comma-separated):"
+  read -r TELEGRAM_ALLOW_FROM < $TTY_IN
+  if [ -z "$TELEGRAM_ALLOW_FROM" ]; then
+    warn "No user IDs set — bot will not respond to anyone."
+  fi
+else
+  TELEGRAM_ALLOW_FROM=""
+  info "Skipping Telegram setup."
+fi
+
+echo ""
+echo "─────────────────────────────────────────────"
+printf "${BOLD}  Network & Directory${NC}\n"
+echo "─────────────────────────────────────────────"
+echo ""
 
 ask "Port [${PORT}]:"
 read -r USER_PORT < $TTY_IN
@@ -346,6 +377,11 @@ AI_GATEWAY_BASE_URL=https://ai.koompi.cloud/v1
 # BYOK (if using your own key)
 ${BYOK_VARS}
 
+# Telegram Notifications
+TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+TELEGRAM_ALLOW_FROM=${TELEGRAM_ALLOW_FROM}
+TELEGRAM_DM_POLICY=allowlist
+
 # Model (auto-selected if empty)
 # OPENCLAW_PRIMARY_MODEL=opencode/kimi-k2.5
 ENVEOF
@@ -353,16 +389,16 @@ ENVEOF
 ok "Wrote ${INSTALL_DIR}/.env"
 
 # ── docker-compose.yml ───────────────────────────────────────────────────────
-cat > "${INSTALL_DIR}/docker-compose.yml" << 'COMPOSEEOF'
+cat > "${INSTALL_DIR}/docker-compose.yml" << COMPOSEEOF
 services:
   openclaw:
-    image: coollabsio/openclaw:latest
+    image: ${OPENCLAW_IMAGE}
     ports:
-      - "${PORT:-8080}:${PORT:-8080}"
+      - "\${PORT:-8080}:\${PORT:-8080}"
     env_file:
       - .env
     environment:
-      - OPENCODE_API_KEY=${KCONSOLE_AI_KEY}
+      - OPENCODE_API_KEY=\${KCONSOLE_AI_KEY}
       - OPENCLAW_PRIMARY_MODEL=opencode/kimi-k2.5
       - BROWSER_CDP_URL=http://browser:9223
       - BROWSER_DEFAULT_PROFILE=openclaw
