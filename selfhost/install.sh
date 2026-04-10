@@ -344,16 +344,81 @@ if [ "$PROVIDER_CHOICE" = "1" ]; then
   ok "Authenticated with KConsole!"
   echo ""
 
+  # ── Choose organization ──────────────────────────────────────────────────
+  info "Fetching your organizations..."
+
+  if [ "$HTTP_CLIENT" = "curl" ]; then
+    ME_RESPONSE=$(curl -sf "${KCONSOLE_API}/api/auth/me" \
+      -H "Authorization: Bearer ${TOKEN}" 2>&1) || fail "Failed to fetch user info."
+  else
+    ME_RESPONSE=$(wget -qO- --header="Authorization: Bearer ${TOKEN}" \
+      "${KCONSOLE_API}/api/auth/me" 2>&1) || fail "Failed to fetch user info."
+  fi
+
+  # Extract org names and IDs (simple grep-based parsing)
+  ORG_IDS=""
+  ORG_NAMES=""
+  ORG_COUNT=0
+  # Parse memberships array — each has "organization":{"_id":"...","name":"..."}
+  ORG_IDS=$(echo "$ME_RESPONSE" | grep -o '"organization":{[^}]*}' | grep -o '"_id":"[^"]*"' | cut -d'"' -f4)
+  ORG_NAMES=$(echo "$ME_RESPONSE" | grep -o '"organization":{[^}]*}' | grep -o '"name":"[^"]*"' | cut -d'"' -f4)
+
+  # Convert to arrays
+  ORG_ID_ARR=()
+  ORG_NAME_ARR=()
+  while IFS= read -r line; do
+    [ -n "$line" ] && ORG_ID_ARR+=("$line")
+  done <<< "$ORG_IDS"
+  while IFS= read -r line; do
+    [ -n "$line" ] && ORG_NAME_ARR+=("$line")
+  done <<< "$ORG_NAMES"
+  ORG_COUNT=${#ORG_ID_ARR[@]}
+
+  SELECTED_ORG_ID=""
+  if [ "$ORG_COUNT" -eq 0 ]; then
+    warn "No organizations found. Will use default."
+  elif [ "$ORG_COUNT" -eq 1 ]; then
+    SELECTED_ORG_ID="${ORG_ID_ARR[0]}"
+    ok "Using organization: ${ORG_NAME_ARR[0]}"
+  else
+    echo ""
+    echo "  Your organizations:"
+    for i in $(seq 0 $((ORG_COUNT - 1))); do
+      printf "    %d) %s\n" "$((i + 1))" "${ORG_NAME_ARR[$i]}"
+    done
+    echo ""
+    ask "Choose organization [1-${ORG_COUNT}]:"
+    read -r ORG_CHOICE < $TTY_IN
+    ORG_CHOICE="${ORG_CHOICE:-1}"
+
+    # Validate choice
+    ORG_IDX=$((ORG_CHOICE - 1))
+    if [ "$ORG_IDX" -ge 0 ] && [ "$ORG_IDX" -lt "$ORG_COUNT" ]; then
+      SELECTED_ORG_ID="${ORG_ID_ARR[$ORG_IDX]}"
+      ok "Using organization: ${ORG_NAME_ARR[$ORG_IDX]}"
+    else
+      SELECTED_ORG_ID="${ORG_ID_ARR[0]}"
+      warn "Invalid choice. Using: ${ORG_NAME_ARR[0]}"
+    fi
+  fi
+  echo ""
+
   # ── Provision resources ──────────────────────────────────────────────────
   info "Provisioning AI Gateway + KStorage..."
+
+  PROV_BODY="{\"template\":\"openclaw\""
+  if [ -n "$SELECTED_ORG_ID" ]; then
+    PROV_BODY="${PROV_BODY},\"organizationId\":\"${SELECTED_ORG_ID}\""
+  fi
+  PROV_BODY="${PROV_BODY}}"
 
   if [ "$HTTP_CLIENT" = "curl" ]; then
     PROV_RESPONSE=$(curl -sf -X POST "${KCONSOLE_API}/api/provision/selfhost" \
       -H "Content-Type: application/json" \
       -H "Authorization: Bearer ${TOKEN}" \
-      -d '{"template":"openclaw"}' 2>&1) || fail "Provisioning failed. Are you logged in?"
+      -d "${PROV_BODY}" 2>&1) || fail "Provisioning failed. Are you logged in?"
   else
-    PROV_RESPONSE=$(wget -qO- --post-data='{"template":"openclaw"}' \
+    PROV_RESPONSE=$(wget -qO- --post-data="${PROV_BODY}" \
       --header="Content-Type: application/json" \
       --header="Authorization: Bearer ${TOKEN}" \
       "${KCONSOLE_API}/api/provision/selfhost" 2>&1) || fail "Provisioning failed. Are you logged in?"
