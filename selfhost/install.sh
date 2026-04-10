@@ -172,7 +172,12 @@ if [ -f "${INSTALL_DIR}/.env" ]; then
     info "Restarting..."
     (cd "${INSTALL_DIR}" && $COMPOSE_CMD up -d)
     echo ""
-    ok "Updated! OpenClaw is running at http://localhost:$(read_env_val PORT)"
+    EXISTING_HTTPS=$(read_env_val ENABLE_HTTPS)
+    if [ "${EXISTING_HTTPS}" = "true" ]; then
+      ok "Updated! OpenClaw is running at https://localhost:$(read_env_val PORT)"
+    else
+      ok "Updated! OpenClaw is running at http://localhost:$(read_env_val PORT)"
+    fi
     exit 0
   fi
 
@@ -241,6 +246,8 @@ if [ "$REUSE_ENV" = "true" ]; then
     AUTH_USERNAME=$(read_env_val AUTH_USERNAME)
     PORT=$(read_env_val PORT)
     PORT="${PORT:-8080}"
+    ENABLE_HTTPS=$(read_env_val ENABLE_HTTPS)
+    ENABLE_HTTPS="${ENABLE_HTTPS:-false}"
     OPENCLAW_GATEWAY_TOKEN=$(read_env_val OPENCLAW_GATEWAY_TOKEN)
     OPENCLAW_ALLOWED_ORIGINS=$(read_env_val OPENCLAW_ALLOWED_ORIGINS)
     info "Reusing existing configuration."
@@ -545,6 +552,16 @@ ask "Port [${PORT}]:"
 read -r USER_PORT < $TTY_IN
 PORT="${USER_PORT:-$PORT}"
 
+ask "Enable HTTPS with self-signed certificate? [y/N]:"
+read -r ENABLE_HTTPS < $TTY_IN
+ENABLE_HTTPS="${ENABLE_HTTPS:-n}"
+if echo "$ENABLE_HTTPS" | grep -qi '^y'; then
+  ENABLE_HTTPS="true"
+  ok "HTTPS enabled (self-signed). Browser will show a certificate warning on first visit."
+else
+  ENABLE_HTTPS="false"
+fi
+
 ask "Install directory [${INSTALL_DIR}]:"
 read -r USER_DIR < $TTY_IN
 INSTALL_DIR="${USER_DIR:-$INSTALL_DIR}"
@@ -567,11 +584,18 @@ if [ -z "${OPENCLAW_ALLOWED_ORIGINS:-}" ]; then
   else
     PUBLIC_IP=$(wget -qO- --timeout=5 https://ifconfig.me 2>/dev/null || wget -qO- --timeout=5 https://api.ipify.org 2>/dev/null || true)
   fi
+
+  if [ "${ENABLE_HTTPS:-false}" = "true" ]; then
+    SCHEME="https"
+  else
+    SCHEME="http"
+  fi
+
   if [ -n "$PUBLIC_IP" ]; then
-    OPENCLAW_ALLOWED_ORIGINS="http://${PUBLIC_IP}:${PORT},http://localhost:${PORT},http://127.0.0.1:${PORT}"
+    OPENCLAW_ALLOWED_ORIGINS="${SCHEME}://${PUBLIC_IP}:${PORT},${SCHEME}://localhost:${PORT},${SCHEME}://127.0.0.1:${PORT}"
     info "Detected public IP: ${PUBLIC_IP}"
   else
-    OPENCLAW_ALLOWED_ORIGINS="http://localhost:${PORT},http://127.0.0.1:${PORT}"
+    OPENCLAW_ALLOWED_ORIGINS="${SCHEME}://localhost:${PORT},${SCHEME}://127.0.0.1:${PORT}"
     warn "Could not detect public IP. Add your IP/domain to OPENCLAW_ALLOWED_ORIGINS in .env if needed."
   fi
 fi
@@ -589,6 +613,7 @@ cat > "${INSTALL_DIR}/.env" << ENVEOF
 PORT=${PORT}
 AUTH_USERNAME=${AUTH_USERNAME}
 AUTH_PASSWORD=${AUTH_PASSWORD}
+ENABLE_HTTPS=${ENABLE_HTTPS:-false}
 OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}
 OPENCLAW_ALLOWED_ORIGINS=${OPENCLAW_ALLOWED_ORIGINS}
 
@@ -613,7 +638,67 @@ ENVEOF
 ok "Wrote ${INSTALL_DIR}/.env"
 
 # ── docker-compose.yml ───────────────────────────────────────────────────────
-cat > "${INSTALL_DIR}/docker-compose.yml" << COMPOSEEOF
+if [ "${ENABLE_HTTPS:-false}" = "true" ]; then
+  # HTTPS mode: Caddy reverse proxy with self-signed cert
+  cat > "${INSTALL_DIR}/docker-compose.yml" << COMPOSEEOF
+services:
+  caddy:
+    image: caddy:latest
+    ports:
+      - "${PORT}:${PORT}"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - openclaw
+    restart: unless-stopped
+
+  openclaw:
+    image: ${OPENCLAW_IMAGE}
+    env_file:
+      - .env
+    environment:
+      - BROWSER_CDP_URL=http://browser:9223
+      - BROWSER_DEFAULT_PROFILE=openclaw
+      - BROWSER_EVALUATE_ENABLED=true
+    volumes:
+      - openclaw-data:/data
+    depends_on:
+      - browser
+    restart: unless-stopped
+
+  browser:
+    image: coollabsio/openclaw-browser:latest
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      - CHROME_CLI=--remote-debugging-port=9222
+    volumes:
+      - browser-data:/config
+    shm_size: 2g
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:
+  openclaw-data:
+  browser-data:
+COMPOSEEOF
+
+  # ── Caddyfile ──────────────────────────────────────────────────────────────
+  cat > "${INSTALL_DIR}/Caddyfile" << CADDYEOF
+:${PORT} {
+    tls internal
+    reverse_proxy openclaw:${PORT}
+}
+CADDYEOF
+  ok "Wrote ${INSTALL_DIR}/Caddyfile (self-signed HTTPS)"
+
+else
+  # HTTP mode: direct port binding
+  cat > "${INSTALL_DIR}/docker-compose.yml" << COMPOSEEOF
 services:
   openclaw:
     image: ${OPENCLAW_IMAGE}
@@ -647,6 +732,7 @@ volumes:
   openclaw-data:
   browser-data:
 COMPOSEEOF
+fi
 
 ok "Wrote ${INSTALL_DIR}/docker-compose.yml"
 echo ""
@@ -663,13 +749,23 @@ info "Starting OpenClaw..."
 echo ""
 
 # ── Health check ─────────────────────────────────────────────────────────────
+if [ "${ENABLE_HTTPS:-false}" = "true" ]; then
+  HEALTH_URL="https://localhost:${PORT}/healthz"
+  APP_URL="https://localhost:${PORT}"
+  CURL_EXTRA="-k"  # accept self-signed cert
+else
+  HEALTH_URL="http://localhost:${PORT}/healthz"
+  APP_URL="http://localhost:${PORT}"
+  CURL_EXTRA=""
+fi
+
 info "Waiting for OpenClaw to start (this can take up to 2 minutes)..."
 HEALTHY=false
 for i in $(seq 1 60); do
   if [ "$HTTP_CLIENT" = "curl" ]; then
-    STATUS=$(curl -sf -o /dev/null -w '%{http_code}' "http://localhost:${PORT}/healthz" 2>/dev/null) || STATUS="000"
+    STATUS=$(curl -sf ${CURL_EXTRA} -o /dev/null -w '%{http_code}' "${HEALTH_URL}" 2>/dev/null) || STATUS="000"
   else
-    STATUS=$(wget -qS -O /dev/null "http://localhost:${PORT}/healthz" 2>&1 | awk '/HTTP\// {print $2}' | tail -1) || STATUS="000"
+    STATUS=$(wget -qS --no-check-certificate -O /dev/null "${HEALTH_URL}" 2>&1 | awk '/HTTP\// {print $2}' | tail -1) || STATUS="000"
   fi
 
   if [ "$STATUS" = "200" ] || [ "$STATUS" = "401" ]; then
@@ -685,12 +781,15 @@ if [ "$HEALTHY" = "true" ]; then
   echo "┌─────────────────────────────────────────────────┐"
   echo "│                                                 │"
   echo "│   OpenClaw is running!                          │"
-  printf "│   URL:      ${NC}${BOLD}http://localhost:%-22s${GREEN}${BOLD}│\n" "${PORT}"
+  printf "│   URL:      ${NC}${BOLD}%-38s${GREEN}${BOLD}│\n" "${APP_URL}"
   printf "│   Username: ${NC}${BOLD}%-37s${GREEN}${BOLD}│\n" "${AUTH_USERNAME}"
   printf "│   Password: ${NC}${BOLD}%-37s${GREEN}${BOLD}│\n" "${AUTH_PASSWORD}"
   echo "│                                                 │"
   echo "└─────────────────────────────────────────────────┘"
   printf "${NC}\n"
+  if [ "${ENABLE_HTTPS:-false}" = "true" ]; then
+    info "Self-signed cert: accept the browser warning on first visit."
+  fi
 else
   warn "OpenClaw did not respond within 2 minutes."
   warn "Check logs with: cd ${INSTALL_DIR} && ${COMPOSE_CMD} logs -f"
