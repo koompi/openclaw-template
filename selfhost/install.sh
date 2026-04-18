@@ -234,7 +234,7 @@ if [ "$REUSE_ENV" = "true" ]; then
   OPENCLAW_PRIMARY_MODEL=$(read_env_val OPENCLAW_PRIMARY_MODEL)
   if [ -z "$OPENCLAW_PRIMARY_MODEL" ]; then
     if [ -n "$KCONSOLE_AI_KEY" ]; then
-      OPENCLAW_PRIMARY_MODEL="kconsole/glm-5-turbo"
+      OPENCLAW_PRIMARY_MODEL="kconsole/koompiclaw"
     else
       OPENCLAW_PRIMARY_MODEL="opencode/kimi-k2.5"
     fi
@@ -442,7 +442,7 @@ if [ "$PROVIDER_CHOICE" = "1" ]; then
 
   ok "Resources provisioned!"
   OPENCLAW_IMAGE="image.koompi.org/kconsole/openclaw:latest"
-  OPENCLAW_PRIMARY_MODEL="kconsole/glm-5-turbo"
+  OPENCLAW_PRIMARY_MODEL="kconsole/koompiclaw"
   echo ""
 
 elif [ "$PROVIDER_CHOICE" = "2" ]; then

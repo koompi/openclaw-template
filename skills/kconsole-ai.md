@@ -34,8 +34,13 @@ curl -X GET "https://ai.koompi.cloud/v1/models" -H "Authorization: Bearer $KEY"
 ### Popular Supported Models
 
 **Text & Chat:**
-- `gemini-3.1-pro-preview`, `gemini-3-flash-preview`, `gemini-2.5-pro`
+- `koompiclaw` — KOOMPI Claw (recommended, multimodal — images + audio)
+- `koompi-smart` — KOOMPI Smart (Gemini 3.1 Pro, most capable)
+- `koompi-fast` — KOOMPI Fast (Gemini 3 Flash, fast + multimodal)
+- `koompi-lite` — KOOMPI Lite (cheapest, multimodal)
+- `koompi-balance` — KOOMPI Balance (GLM-5.1 + auto-fallback to GLM-5, multimodal)
 - `glm-5-turbo`, `glm-5`, `glm-4.7-flash`, `glm-4-plus`, `glm-4-air`
+- `gemini-3.1-pro-preview`, `gemini-3-flash-preview`, `gemini-2.5-pro`
 
 **Image Generation:**
 - `gemini-3.1-flash-image-preview` — Fast, good quality (default, Nano Banana 2)
@@ -58,7 +63,7 @@ curl -s -X POST "https://ai.koompi.cloud/v1/chat/completions" \
   -H "Authorization: Bearer $KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "glm-5-turbo",
+    "model": "koompiclaw",
     "messages": [{"role":"user","content":"PROMPT HERE"}],
     "stream": true
   }'

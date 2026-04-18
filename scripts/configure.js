@@ -367,6 +367,7 @@ if (kconsoleApiKey) {
     baseUrl: kconsoleBaseUrl,
     apiKey: kconsoleApiKey,
     models: [
+      { id: "koompiclaw",                 name: "KOOMPI Claw (recommended)",  contextWindow: 128000,  maxTokens: 16384, reasoning: false, input: ["text", "image", "audio"], cost: { input: 0.07,  output: 0.07,  cacheRead: 0, cacheWrite: 0 } },
       { id: "glm-5-turbo",                 name: "GLM-5 Turbo (fast, cheap)",   contextWindow: 128000,  maxTokens: 16384, reasoning: false, input: ["text"], cost: { input: 0.07,  output: 0.07,  cacheRead: 0, cacheWrite: 0 } },
       { id: "glm-5",                       name: "GLM-5",                        contextWindow: 128000,  maxTokens: 16384, reasoning: false, input: ["text"], cost: { input: 0.14,  output: 0.14,  cacheRead: 0, cacheWrite: 0 } },
       { id: "gemini-3.1-pro-preview",      name: "Gemini 3.1 Pro",               contextWindow: 1000000, maxTokens: 8192,  reasoning: true,  input: ["text"], cost: { input: 2.00,  output: 12.00, cacheRead: 0, cacheWrite: 0 } },
@@ -378,6 +379,7 @@ if (kconsoleApiKey) {
   // Allowlist all models so openclaw will route to them
   ensure(config, "agents", "defaults", "models");
   const kconsoleAllowlist = {
+    "kconsole/koompiclaw":                  { alias: "koompiclaw" },
     "kconsole/glm-5-turbo":                 { alias: "glm-5-turbo" },
     "kconsole/glm-5":                       { alias: "glm-5" },
     "kconsole/gemini-3.1-pro-preview":      { alias: "gemini-3.1-pro" },
@@ -413,7 +415,7 @@ const primaryCandidates = [
   [process.env.MINIMAX_API_KEY,        "minimax/MiniMax-M2.1"],
   [process.env.SYNTHETIC_API_KEY,      "synthetic/hf:MiniMaxAI/MiniMax-M2.1"],
   [process.env.ZAI_API_KEY,            "zai/glm-4.7"],
-  [kconsoleApiKey,                     "kconsole/glm-5-turbo"],
+  [kconsoleApiKey,                     "kconsole/koompiclaw"],
   [process.env.XIAOMI_API_KEY,         "xiaomi/mimo-v2-flash"],
   [process.env.AWS_ACCESS_KEY_ID,      "amazon-bedrock/anthropic.claude-opus-4-5-20251101-v1:0"],
   [ollamaUrl,                          "ollama/llama3.3"],
@@ -493,7 +495,7 @@ if (kconsoleApiKey && process.env.OPENCLAW_MEMORY_SEARCH !== "false") {
   pro.config.llm = pro.config.llm || {};
   if (!pro.config.llm.apiKey) pro.config.llm.apiKey = kconsoleApiKey;
   if (!pro.config.llm.baseURL) pro.config.llm.baseURL = kconsoleBaseUrl;
-  if (!pro.config.llm.model)   pro.config.llm.model = "glm-5-turbo";
+  if (!pro.config.llm.model)   pro.config.llm.model = "koompiclaw";
 
   // Sensible defaults (don't overwrite user customizations)
   if (pro.config.autoCapture       === undefined) pro.config.autoCapture = true;
@@ -516,7 +518,7 @@ if (kconsoleApiKey && process.env.OPENCLAW_MEMORY_SEARCH !== "false") {
 
   console.log("[configure] memory search enabled → memory-lancedb-pro via KOOMPI AI Gateway");
   console.log("[configure]   embedding: text-embedding-3-small @ 1536d (→ gemini-embedding-001)");
-  console.log("[configure]   smart extraction LLM: glm-5-turbo");
+  console.log("[configure]   smart extraction LLM: koompiclaw");
   console.log("[configure]   autoCapture: true, autoRecall: true, smartExtraction: true");
 } else {
   ensure(config, "agents", "defaults", "memorySearch");
