@@ -367,7 +367,7 @@ if (kconsoleApiKey) {
     baseUrl: kconsoleBaseUrl,
     apiKey: kconsoleApiKey,
     models: [
-      { id: "koompiclaw",                 name: "KOOMPI Claw (recommended)",  contextWindow: 128000,  maxTokens: 16384, reasoning: false, input: ["text", "image", "audio"], cost: { input: 0.07,  output: 0.07,  cacheRead: 0, cacheWrite: 0 } },
+      { id: "koompiclaw",                 name: "KOOMPI Claw (recommended)",  contextWindow: 128000,  maxTokens: 16384, reasoning: false, input: ["text", "image"], cost: { input: 0.07,  output: 0.07,  cacheRead: 0, cacheWrite: 0 } },
       { id: "glm-5-turbo",                 name: "GLM-5 Turbo (fast, cheap)",   contextWindow: 128000,  maxTokens: 16384, reasoning: false, input: ["text"], cost: { input: 0.07,  output: 0.07,  cacheRead: 0, cacheWrite: 0 } },
       { id: "glm-5",                       name: "GLM-5",                        contextWindow: 128000,  maxTokens: 16384, reasoning: false, input: ["text"], cost: { input: 0.14,  output: 0.14,  cacheRead: 0, cacheWrite: 0 } },
       { id: "gemini-3.1-pro-preview",      name: "Gemini 3.1 Pro",               contextWindow: 1000000, maxTokens: 8192,  reasoning: true,  input: ["text"], cost: { input: 2.00,  output: 12.00, cacheRead: 0, cacheWrite: 0 } },
