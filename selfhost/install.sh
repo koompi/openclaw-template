@@ -362,13 +362,36 @@ if [ "$PROVIDER_CHOICE" = "1" ]; then
       "${KCONSOLE_API}/api/auth/me" 2>&1) || fail "Failed to fetch user info."
   fi
 
-  # Extract org names and IDs (simple grep-based parsing)
+  # Extract org names and IDs from nested JSON response
+  # Uses python3 for reliable parsing (grep can't handle nested braces); jq as fallback.
   ORG_IDS=""
   ORG_NAMES=""
   ORG_COUNT=0
-  # Parse memberships array — each has "organization":{"_id":"...","name":"..."}
-  ORG_IDS=$(echo "$ME_RESPONSE" | grep -o '"organization":{[^}]*}' | grep -o '"_id":"[^"]*"' | cut -d'"' -f4)
-  ORG_NAMES=$(echo "$ME_RESPONSE" | grep -o '"organization":{[^}]*}' | grep -o '"name":"[^"]*"' | cut -d'"' -f4)
+  if command -v python3 >/dev/null 2>&1; then
+    ORG_IDS=$(echo "$ME_RESPONSE" | python3 -c "
+import sys, json
+try:
+    d = json.loads(sys.stdin.read())
+    for m in d.get('data', {}).get('memberships', []):
+        print(m['organization']['_id'])
+except Exception:
+    pass
+" 2>/dev/null) || true
+    ORG_NAMES=$(echo "$ME_RESPONSE" | python3 -c "
+import sys, json
+try:
+    d = json.loads(sys.stdin.read())
+    for m in d.get('data', {}).get('memberships', []):
+        print(m['organization']['name'])
+except Exception:
+    pass
+" 2>/dev/null) || true
+  elif command -v jq >/dev/null 2>&1; then
+    ORG_IDS=$(echo "$ME_RESPONSE" | jq -r '.data.memberships[].organization._id' 2>/dev/null) || true
+    ORG_NAMES=$(echo "$ME_RESPONSE" | jq -r '.data.memberships[].organization.name' 2>/dev/null) || true
+  else
+    warn "python3 and jq not found — cannot parse organizations. Continuing without org selection."
+  fi
 
   # Convert to arrays
   ORG_ID_ARR=()
