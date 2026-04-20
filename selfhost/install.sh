@@ -464,7 +464,7 @@ except Exception:
   KSTORAGE_API_KEY=$(echo "$PROV_RESPONSE" | grep -o '"KSTORAGE_API_KEY":"[^"]*"' | cut -d'"' -f4)
 
   ok "Resources provisioned!"
-  OPENCLAW_IMAGE="image.koompi.org/kconsole/openclaw:latest"
+  OPENCLAW_IMAGE="image.koompi.org/koompiclaw/openclaw:latest"
   OPENCLAW_PRIMARY_MODEL="kconsole/koompiclaw"
   echo ""
 
