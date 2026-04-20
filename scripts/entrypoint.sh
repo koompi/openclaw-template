@@ -421,6 +421,12 @@ NGINXEOF
 echo "[entrypoint] starting nginx on port ${PORT:-8080}..."
 nginx
 
+# ── Startup optimizations ──────────────────────────────────────────────────
+# Ensure Node.js compile cache directory exists for faster restarts.
+# NODE_COMPILE_CACHE (set in Dockerfile) persists V8 bytecode across restarts,
+# making repeated CLI/gateway startup significantly faster.
+mkdir -p "${NODE_COMPILE_CACHE:-/var/tmp/openclaw-compile-cache}"
+
 # ── Clean up stale lock files ────────────────────────────────────────────────
 rm -f /tmp/openclaw-gateway.lock 2>/dev/null || true
 rm -f "$STATE_DIR/gateway.lock" 2>/dev/null || true

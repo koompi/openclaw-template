@@ -2,7 +2,9 @@ ARG BASE_IMAGE=ghcr.io/coollabsio/openclaw-base:latest
 
 FROM ${BASE_IMAGE}
 
-ENV NODE_ENV=production
+ENV NODE_ENV=production \
+    NODE_COMPILE_CACHE=/var/tmp/openclaw-compile-cache \
+    OPENCLAW_NO_RESPAWN=1
 
 RUN apt-get update \
   && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
