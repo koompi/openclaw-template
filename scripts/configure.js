@@ -915,6 +915,79 @@ if (!hasProvider) {
   process.exit(1);
 }
 
+// ── Disable credential-dependent plugins when their keys are absent ──────────
+// openclaw installs bundled npm deps for every loaded plugin, even disabled
+// ones. Explicitly disabling unused plugins here prevents those installs and
+// dramatically reduces cold-start time (saves 200-300s on first start).
+//
+// Each block: disable the plugin unless the relevant credential is present.
+// Custom JSON that explicitly enables a plugin overrides these defaults.
+function disablePluginIfAbsent(pluginName, credential, reason) {
+  // Don't override an explicit user enable in custom JSON
+  if (config.plugins?.entries?.[pluginName]?.enabled === true) return;
+  ensure(config, "plugins", "entries");
+  config.plugins.entries[pluginName] = config.plugins.entries[pluginName] || {};
+  config.plugins.entries[pluginName].enabled = false;
+  console.log(`[configure] ${pluginName} plugin disabled (${reason} not set)`);
+}
+
+// Google Gemini provider plugin — needs GEMINI_API_KEY
+if (!process.env.GEMINI_API_KEY) {
+  disablePluginIfAbsent("google", "GEMINI_API_KEY", "GEMINI_API_KEY");
+}
+
+// GitHub Copilot plugin — needs COPILOT_GITHUB_TOKEN
+if (!process.env.COPILOT_GITHUB_TOKEN) {
+  disablePluginIfAbsent("github-copilot", "COPILOT_GITHUB_TOKEN", "COPILOT_GITHUB_TOKEN");
+}
+
+// Anthropic provider plugin — needs ANTHROPIC_API_KEY
+if (!process.env.ANTHROPIC_API_KEY) {
+  disablePluginIfAbsent("anthropic", "ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY");
+}
+
+// Anthropic Vertex plugin — needs GCP Vertex credentials
+const hasVertexCreds = !!(
+  process.env.ANTHROPIC_VERTEX_PROJECT_ID ||
+  process.env.GOOGLE_APPLICATION_CREDENTIALS ||
+  process.env.GOOGLE_CLOUD_PROJECT
+);
+if (!hasVertexCreds) {
+  disablePluginIfAbsent("anthropic-vertex", "ANTHROPIC_VERTEX_PROJECT_ID", "ANTHROPIC_VERTEX_PROJECT_ID/GOOGLE_APPLICATION_CREDENTIALS");
+}
+
+// Amazon Bedrock plugins — both need AWS credentials
+const hasAwsCreds = !!(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY);
+if (!hasAwsCreds) {
+  disablePluginIfAbsent("amazon-bedrock", "AWS credentials", "AWS_ACCESS_KEY_ID+AWS_SECRET_ACCESS_KEY");
+  disablePluginIfAbsent("amazon-bedrock-mantle", "AWS credentials", "AWS_ACCESS_KEY_ID+AWS_SECRET_ACCESS_KEY");
+}
+
+// ElevenLabs TTS plugin — needs ELEVENLABS_API_KEY
+if (!process.env.ELEVENLABS_API_KEY) {
+  disablePluginIfAbsent("elevenlabs", "ELEVENLABS_API_KEY", "ELEVENLABS_API_KEY");
+}
+
+// Deepgram transcription plugin — needs DEEPGRAM_API_KEY (separate from tools.media.audio config)
+if (!process.env.DEEPGRAM_API_KEY) {
+  disablePluginIfAbsent("deepgram", "DEEPGRAM_API_KEY", "DEEPGRAM_API_KEY");
+}
+
+// Microsoft TTS/Speech plugin — needs Azure/Microsoft speech credentials
+const hasMicrosoftCreds = !!(
+  process.env.MICROSOFT_TTS_KEY ||
+  process.env.AZURE_SPEECH_KEY ||
+  process.env.MICROSOFT_COGNITIVE_SERVICES_KEY
+);
+if (!hasMicrosoftCreds) {
+  disablePluginIfAbsent("microsoft", "Microsoft speech credentials", "MICROSOFT_TTS_KEY/AZURE_SPEECH_KEY");
+}
+
+// document-extract — installs pdfjs-dist (~13s). Only load when PDF handling is needed.
+if (process.env.OPENCLAW_ENABLE_DOCUMENT_EXTRACT !== "true") {
+  disablePluginIfAbsent("document-extract", "OPENCLAW_ENABLE_DOCUMENT_EXTRACT", "OPENCLAW_ENABLE_DOCUMENT_EXTRACT");
+}
+
 // ── Disable container-hostile plugins ───────────────────────────────────────
 // Bonjour: tries mDNS/Zeroconf advertising on the local network. Always fails
 // in containers with "CIAO ANNOUNCEMENT CANCELLED" unhandled rejections.
