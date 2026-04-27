@@ -29,6 +29,31 @@ RUN mkdir -p /app/plugins && cd /app/plugins \
   && npm init -y --silent 2>/dev/null \
   && npm install memory-lancedb-pro@beta --save --silent 2>&1 | tail -5
 
+# Pre-install openclaw plugin bundled runtime deps at build time.
+# Without this, openclaw runs `npm install` for each active plugin at every
+# container start, adding ~7 minutes of download time.
+# These packages were collected from the "[plugins] ... staging bundled runtime deps" logs.
+# openclaw resolves them from /app/node_modules (its own install root).
+RUN cd /app && npm install --no-save --silent \
+    "@mariozechner/pi-ai@0.70.2" \
+    "@mariozechner/pi-agent-core@0.70.2" \
+    "@google/genai@^1.50.1" \
+    "@clack/prompts@^1.2.0" \
+    "@anthropic-ai/sdk@0.90.0" \
+    "@anthropic-ai/vertex-sdk@^0.16.0" \
+    "@aws/bedrock-token-generator@^1.1.0" \
+    "@modelcontextprotocol/sdk@1.29.0" \
+    "@homebridge/ciao@^1.3.6" \
+    "acpx@0.5.3" \
+    "ws@^8.20.0" \
+    "pdfjs-dist@^5.6.205" \
+    "playwright-core@1.59.1" \
+    "commander@^14.0.3" \
+    "express@^5.2.1" \
+    "undici@8.1.0" \
+    "typebox@1.1.31" \
+  2>&1 | tail -5
+
 # Bundle KOOMPI Cloud skill docs (KConsole, KStorage, AI Gateway)
 COPY skills/ /app/skills/
 

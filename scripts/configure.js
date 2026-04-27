@@ -915,6 +915,17 @@ if (!hasProvider) {
   process.exit(1);
 }
 
+// ── Disable container-hostile plugins ───────────────────────────────────────
+// Bonjour: tries mDNS/Zeroconf advertising on the local network. Always fails
+// in containers with "CIAO ANNOUNCEMENT CANCELLED" unhandled rejections.
+// Useless in a cloud environment — disable unless explicitly opted in.
+if (process.env.OPENCLAW_ENABLE_BONJOUR !== "true") {
+  ensure(config, "plugins", "entries");
+  config.plugins.entries["bonjour"] = config.plugins.entries["bonjour"] || {};
+  config.plugins.entries["bonjour"].enabled = false;
+  console.log("[configure] bonjour plugin disabled (set OPENCLAW_ENABLE_BONJOUR=true to re-enable)");
+}
+
 // ── Write config ────────────────────────────────────────────────────────────
 
 fs.mkdirSync(path.dirname(CONFIG_FILE), { recursive: true });

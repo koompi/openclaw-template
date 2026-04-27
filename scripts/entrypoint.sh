@@ -16,13 +16,17 @@ mkdir -p "$NPM_CONFIG_PREFIX/bin" "$UV_TOOL_DIR/bin" "$UV_CACHE_DIR" "$GOPATH/bi
 # Linuxbrew persistence and symlinking
 BREW_PERSIST_DIR="/data/linuxbrew"
 if [ ! -d "$BREW_PERSIST_DIR" ]; then
-    echo "[entrypoint] Initializing persistent linuxbrew storage..."
+    echo "[entrypoint] Initializing persistent linuxbrew storage (background)..."
     mkdir -p "$BREW_PERSIST_DIR"
-    if [ -d "/home/linuxbrew/.linuxbrew" ] && [ ! -L "/home/linuxbrew/.linuxbrew" ]; then
-        cp -a /home/linuxbrew/.linuxbrew/* "$BREW_PERSIST_DIR/" || true
-        cp -a /home/linuxbrew/.linuxbrew/.[!.]* "$BREW_PERSIST_DIR/" 2>/dev/null || true
-    fi
-    chown -R linuxbrew:linuxbrew "$BREW_PERSIST_DIR"
+    # Run the slow copy in background — brew isn't needed before openclaw starts
+    (
+        if [ -d "/home/linuxbrew/.linuxbrew" ] && [ ! -L "/home/linuxbrew/.linuxbrew" ]; then
+            cp -a /home/linuxbrew/.linuxbrew/* "$BREW_PERSIST_DIR/" 2>/dev/null || true
+            cp -a /home/linuxbrew/.linuxbrew/.[!.]* "$BREW_PERSIST_DIR/" 2>/dev/null || true
+        fi
+        chown -R linuxbrew:linuxbrew "$BREW_PERSIST_DIR"
+        echo "[entrypoint] linuxbrew copy complete"
+    ) &
 fi
 
 if [ ! -L "/home/linuxbrew/.linuxbrew" ]; then
@@ -238,9 +242,15 @@ chmod +x /usr/local/bin/oc-allow
 mkdir -p /data/config
 
 # ── Auto-fix doctor suggestions (e.g. enable configured channels) ─────────
-echo "[entrypoint] running openclaw doctor --fix..."
-cd /opt/openclaw/app
-openclaw doctor --fix 2>&1 || true
+# Run in background — doctor scan takes several seconds and blocks gateway startup.
+# The gateway is fully usable before doctor finishes.
+echo "[entrypoint] running openclaw doctor --fix (background)..."
+(
+    sleep 2  # Let the gateway start first
+    cd /opt/openclaw/app
+    openclaw doctor --fix 2>&1 || true
+    echo "[entrypoint] openclaw doctor --fix done"
+) &
 
 # ── Read hooks path from generated config (if hooks enabled) ─────────────────
 HOOKS_PATH=""
