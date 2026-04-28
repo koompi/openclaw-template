@@ -13,8 +13,6 @@ RUN apt-get update \
     chromium \
     xvfb \
     ffmpeg \
-    fonts-noto-cjk \
-    fonts-noto-color-emoji \
   && rm -rf /var/lib/apt/lists/*
 
 # Remove default nginx site
@@ -32,21 +30,22 @@ RUN mkdir -p /app/plugins && cd /app/plugins \
 # Pre-install openclaw plugin bundled runtime deps at build time.
 # Without this, openclaw runs `npm install` for each active plugin at every
 # container start, adding ~7 minutes of download time.
+# Pre-install common plugin dependencies to speed up startup
+RUN mkdir -p /opt/openclaw/app/plugins/bundled \
+    && cd /opt/openclaw/app/plugins/bundled \
+    && npm install --silent @modelcontextprotocol/sdk@1.29.0 commander@^14.0.3 express@5.2.1 playwright-core@1.59.1 typebox@1.1.33 undici@8.1.0 ws@^8.20.0
+
 # Bundle KOOMPI Cloud skill docs (KConsole, KStorage, AI Gateway)
 COPY skills/ /app/skills/
 
 # Pre-install koompi-office Python dependencies at build time so the agent
 # can use Excel/PDF/Word/PowerPoint/Image/Charts/QR/Barcode immediately
 # without waiting for pip install on every container start.
-# Also install TikTok uploader deps for social-media-automation skill.
+# Note: tiktokautouploader and phantomwright are removed to reduce image size.
 RUN uv pip install --system --break-system-packages --no-cache \
     openpyxl pandas xlsxwriter pdfplumber reportlab \
     python-docx python-pptx Pillow matplotlib \
-    qrcode python-barcode \
-    tiktokautouploader
-
-# Install Phantomwright Chromium driver for TikTok stealth browser automation
-RUN python3 -c "from phantomwright.driver import install; install('chromium')" 2>&1 | tail -3 || true
+    qrcode python-barcode
 
 # Set Chromium path for Playwright/Phantomwright (Debian package location)
 ENV CHROMIUM_PATH="/usr/bin/chromium" \
