@@ -194,6 +194,8 @@ for (const [envKey, label, providerKey] of builtinProviders) {
     delete config.models.providers[providerKey];
   }
 }
+
+// OpenCode handled separately due to dual env var support
 if (opencodeKey) {
   console.log("[configure] OpenCode provider enabled (OPENCODE_API_KEY set)");
 }
@@ -470,11 +472,10 @@ if (kconsoleApiKey && process.env.OPENCLAW_MEMORY_SEARCH !== "false") {
   }
 
   ensure(config, "plugins", "entries");
-  // Remove old built-in memory-lancedb config if present (migration)
-  if (config.plugins.entries["memory-lancedb"]) {
-    delete config.plugins.entries["memory-lancedb"];
-    console.log("[configure] migrating from memory-lancedb → memory-lancedb-pro");
-  }
+  // Explicitly disable old built-in memory-lancedb (migration)
+  // Just deleting it isn't enough; must set enabled: false to stop bundled installs.
+  config.plugins.entries["memory-lancedb"] = config.plugins.entries["memory-lancedb"] || {};
+  config.plugins.entries["memory-lancedb"].enabled = false;
 
   const pro = config.plugins.entries["memory-lancedb-pro"] =
     config.plugins.entries["memory-lancedb-pro"] || {};
@@ -517,12 +518,17 @@ if (kconsoleApiKey && process.env.OPENCLAW_MEMORY_SEARCH !== "false") {
   config.agents.defaults.memorySearch.enabled = true;
 
   console.log("[configure] memory search enabled → memory-lancedb-pro via KOOMPI AI Gateway");
-  console.log("[configure]   embedding: text-embedding-3-small @ 1536d (→ gemini-embedding-001)");
-  console.log("[configure]   smart extraction LLM: koompiclaw");
-  console.log("[configure]   autoCapture: true, autoRecall: true, smartExtraction: true");
 } else {
   ensure(config, "agents", "defaults", "memorySearch");
   config.agents.defaults.memorySearch.enabled = false;
+
+  // Explicitly disable BOTH memory plugins if search is off
+  ensure(config, "plugins", "entries");
+  config.plugins.entries["memory-lancedb"] = config.plugins.entries["memory-lancedb"] || {};
+  config.plugins.entries["memory-lancedb"].enabled = false;
+  config.plugins.entries["memory-lancedb-pro"] = config.plugins.entries["memory-lancedb-pro"] || {};
+  config.plugins.entries["memory-lancedb-pro"].enabled = false;
+
   const reason = !kconsoleApiKey ? "no AI_GATEWAY_API_KEY" : "OPENCLAW_MEMORY_SEARCH=false";
   console.log(`[configure] memory search disabled (${reason})`);
 }
@@ -931,61 +937,42 @@ function disablePluginIfAbsent(pluginName, credential, reason) {
   console.log(`[configure] ${pluginName} plugin disabled (${reason} not set)`);
 }
 
-// Google Gemini provider plugin — needs GEMINI_API_KEY
-if (!process.env.GEMINI_API_KEY) {
-  disablePluginIfAbsent("google", "GEMINI_API_KEY", "GEMINI_API_KEY");
-}
+// Built-in provider plugins
+if (!process.env.ANTHROPIC_API_KEY)      disablePluginIfAbsent("anthropic",      "ANTHROPIC_API_KEY",      "ANTHROPIC_API_KEY");
+if (!process.env.OPENAI_API_KEY)         disablePluginIfAbsent("openai",         "OPENAI_API_KEY",         "OPENAI_API_KEY");
+if (!process.env.GEMINI_API_KEY)         disablePluginIfAbsent("google",         "GEMINI_API_KEY",         "GEMINI_API_KEY");
+if (!process.env.GROQ_API_KEY)           disablePluginIfAbsent("groq",           "GROQ_API_KEY",           "GROQ_API_KEY");
+if (!process.env.MISTRAL_API_KEY)        disablePluginIfAbsent("mistral",        "MISTRAL_API_KEY",        "MISTRAL_API_KEY");
+if (!process.env.OPENROUTER_API_KEY)     disablePluginIfAbsent("openrouter",     "OPENROUTER_API_KEY",     "OPENROUTER_API_KEY");
+if (!process.env.XAI_API_KEY)            disablePluginIfAbsent("xai",            "XAI_API_KEY",            "XAI_API_KEY");
+if (!process.env.CEREBRAS_API_KEY)       disablePluginIfAbsent("cerebras",       "CEREBRAS_API_KEY",       "CEREBRAS_API_KEY");
+if (!process.env.COPILOT_GITHUB_TOKEN)   disablePluginIfAbsent("github-copilot", "COPILOT_GITHUB_TOKEN", "COPILOT_GITHUB_TOKEN");
 
-// GitHub Copilot plugin — needs COPILOT_GITHUB_TOKEN
-if (!process.env.COPILOT_GITHUB_TOKEN) {
-  disablePluginIfAbsent("github-copilot", "COPILOT_GITHUB_TOKEN", "COPILOT_GITHUB_TOKEN");
-}
+// Special provider plugins
+const hasVertexCreds = !!(process.env.ANTHROPIC_VERTEX_PROJECT_ID || process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.GOOGLE_CLOUD_PROJECT);
+if (!hasVertexCreds) disablePluginIfAbsent("anthropic-vertex", "Vertex AI", "ANTHROPIC_VERTEX_PROJECT_ID");
 
-// Anthropic provider plugin — needs ANTHROPIC_API_KEY
-if (!process.env.ANTHROPIC_API_KEY) {
-  disablePluginIfAbsent("anthropic", "ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY");
-}
-
-// Anthropic Vertex plugin — needs GCP Vertex credentials
-const hasVertexCreds = !!(
-  process.env.ANTHROPIC_VERTEX_PROJECT_ID ||
-  process.env.GOOGLE_APPLICATION_CREDENTIALS ||
-  process.env.GOOGLE_CLOUD_PROJECT
-);
-if (!hasVertexCreds) {
-  disablePluginIfAbsent("anthropic-vertex", "ANTHROPIC_VERTEX_PROJECT_ID", "ANTHROPIC_VERTEX_PROJECT_ID/GOOGLE_APPLICATION_CREDENTIALS");
-}
-
-// Amazon Bedrock plugins — both need AWS credentials
 const hasAwsCreds = !!(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY);
 if (!hasAwsCreds) {
-  disablePluginIfAbsent("amazon-bedrock", "AWS credentials", "AWS_ACCESS_KEY_ID+AWS_SECRET_ACCESS_KEY");
-  disablePluginIfAbsent("amazon-bedrock-mantle", "AWS credentials", "AWS_ACCESS_KEY_ID+AWS_SECRET_ACCESS_KEY");
+  disablePluginIfAbsent("amazon-bedrock", "AWS Bedrock", "AWS credentials");
+  disablePluginIfAbsent("amazon-bedrock-mantle", "AWS Bedrock Mantle", "AWS credentials");
 }
 
-// ElevenLabs TTS plugin — needs ELEVENLABS_API_KEY
-if (!process.env.ELEVENLABS_API_KEY) {
-  disablePluginIfAbsent("elevenlabs", "ELEVENLABS_API_KEY", "ELEVENLABS_API_KEY");
-}
+// Search & Tool plugins
+if (!process.env.TAVILY_API_KEY)         disablePluginIfAbsent("tavily",         "Tavily Search",          "TAVILY_API_KEY");
+if (!process.env.BRAVE_SEARCH_API_KEY)   disablePluginIfAbsent("brave-search",   "Brave Search",           "BRAVE_SEARCH_API_KEY");
+if (!process.env.SERPER_API_KEY)         disablePluginIfAbsent("serper",         "Serper Search",          "SERPER_API_KEY");
 
-// Deepgram transcription plugin — needs DEEPGRAM_API_KEY (separate from tools.media.audio config)
-if (!process.env.DEEPGRAM_API_KEY) {
-  disablePluginIfAbsent("deepgram", "DEEPGRAM_API_KEY", "DEEPGRAM_API_KEY");
-}
+// Audio/Media plugins
+if (!process.env.ELEVENLABS_API_KEY)     disablePluginIfAbsent("elevenlabs",     "ElevenLabs TTS",         "ELEVENLABS_API_KEY");
+if (!process.env.DEEPGRAM_API_KEY)       disablePluginIfAbsent("deepgram",       "Deepgram Audio",         "DEEPGRAM_API_KEY");
 
-// Microsoft TTS/Speech plugin — needs Azure/Microsoft speech credentials
-const hasMicrosoftCreds = !!(
-  process.env.MICROSOFT_TTS_KEY ||
-  process.env.AZURE_SPEECH_KEY ||
-  process.env.MICROSOFT_COGNITIVE_SERVICES_KEY
-);
-if (!hasMicrosoftCreds) {
-  disablePluginIfAbsent("microsoft", "Microsoft speech credentials", "MICROSOFT_TTS_KEY/AZURE_SPEECH_KEY");
-}
+const hasMicrosoftCreds = !!(process.env.MICROSOFT_TTS_KEY || process.env.AZURE_SPEECH_KEY || process.env.MICROSOFT_COGNITIVE_SERVICES_KEY);
+if (!hasMicrosoftCreds) disablePluginIfAbsent("microsoft", "Microsoft Speech", "MICROSOFT_TTS_KEY");
 
-// document-extract — installs pdfjs-dist (~13s). Only load when PDF handling is needed.
+// Other heavy plugins
 if (process.env.OPENCLAW_ENABLE_DOCUMENT_EXTRACT !== "true") {
-  disablePluginIfAbsent("document-extract", "OPENCLAW_ENABLE_DOCUMENT_EXTRACT", "OPENCLAW_ENABLE_DOCUMENT_EXTRACT");
+  disablePluginIfAbsent("document-extract", "Document Extract", "OPENCLAW_ENABLE_DOCUMENT_EXTRACT");
 }
 
 // ── Disable container-hostile plugins ───────────────────────────────────────
@@ -993,10 +980,7 @@ if (process.env.OPENCLAW_ENABLE_DOCUMENT_EXTRACT !== "true") {
 // in containers with "CIAO ANNOUNCEMENT CANCELLED" unhandled rejections.
 // Useless in a cloud environment — disable unless explicitly opted in.
 if (process.env.OPENCLAW_ENABLE_BONJOUR !== "true") {
-  ensure(config, "plugins", "entries");
-  config.plugins.entries["bonjour"] = config.plugins.entries["bonjour"] || {};
-  config.plugins.entries["bonjour"].enabled = false;
-  console.log("[configure] bonjour plugin disabled (set OPENCLAW_ENABLE_BONJOUR=true to re-enable)");
+  disablePluginIfAbsent("bonjour", "Bonjour/mDNS", "OPENCLAW_ENABLE_BONJOUR");
 }
 
 // ── Write config ────────────────────────────────────────────────────────────
